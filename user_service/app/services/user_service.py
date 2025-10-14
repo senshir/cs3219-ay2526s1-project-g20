@@ -3,6 +3,8 @@ from datetime import datetime
 from app.db.database import users_collection
 from app.models.user import UserCreate, UserResponse, PublicUserResponse
 from app.utils.security import get_password_hash, verify_password
+from app.utils.verification import create_verification_token
+from app.services.email_service import send_verification_email
 
 class UserService:
     @staticmethod
@@ -23,27 +25,35 @@ class UserService:
             )
         
         # Create new user
-        user_doc = {
+        user = {
             "email": user_data.email,
             "username": user_data.username,
             "password": get_password_hash(user_data.password),
-            "account_creation_date": datetime.utcnow(),
+            "account_creation_date": datetime.now(),
             "last_login": None,
             "is_verified": False,
             "failed_login_attempts": 0,
             "is_locked": False
         }
         
-        result = users_collection.insert_one(user_doc)
+        result = users_collection.insert_one(user)
         user_id = str(result.inserted_id)
         
-        return UserResponse(
-            id=user_id,
-            email=user_data.email,
-            username=user_data.username,
-            account_creation_date=user_doc["account_creation_date"],
-            last_login=user_doc["last_login"]
+        verification_token = create_verification_token(user_id)
+        email_sent = send_verification_email(
+        email=user_data.email,
+        user_id=user_id,
+        token=verification_token
         )
+    
+        if not email_sent:
+        # Optional: Rollback user creation if email fails (or handle in background)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Registration successful, but failed to send verification email. Please try again later."
+            )
+    
+        return {**user, "id": user_id}
 
     @staticmethod
     def get_user_by_credentials(username_or_email: str) -> dict:

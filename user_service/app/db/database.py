@@ -1,4 +1,5 @@
 from pymongo import MongoClient
+from pymongo.collection import Collection
 from app.config import MONGO_URI, DATABASE_NAME, USERS_COLLECTION
 
 # Initialize MongoDB client
@@ -9,6 +10,10 @@ db = client[DATABASE_NAME]
 
 # Get collections
 users_collection = db[USERS_COLLECTION]
+
+def get_users_collection() -> Collection:
+    """Return the users collection (for use in other parts of the app)"""
+    return users_collection
 
 # Create indexes for unique fields
 def create_indexes():
