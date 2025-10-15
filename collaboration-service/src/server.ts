@@ -1,5 +1,5 @@
 import { createApp, AppConfig } from "./app";
-import { initWebsocketServer } from "./ws/websocketServer"; // you'll implement this
+import { initWebsocketServer } from "./ws/websocketServer";
 import type { Server as HttpServer } from "http";
 
 // ---- minimal env/config parsing ----

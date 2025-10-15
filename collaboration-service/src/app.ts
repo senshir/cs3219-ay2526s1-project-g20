@@ -1,5 +1,4 @@
 import Fastify, { FastifyInstance } from "fastify";
-import pino from "pino";
 import fp from "fastify-plugin";
 
 import client from "prom-client";
@@ -26,16 +25,15 @@ const metricsPlugin = fp(async (app: FastifyInstance) => {
 });
 
 export function createApp(config: AppConfig): FastifyInstance {
-  const logger = pino({
-    level: process.env.LOG_LEVEL || "info",
-    transport:
-      process.env.NODE_ENV === "development"
-        ? { target: "pino-pretty", options: { colorize: true } }
-        : undefined,
-  });
-
   const app = Fastify({
-    logger,
+    logger: {
+      level: process.env.LOG_LEVEL || "info",
+      // Pretty logs in dev (optional)
+      transport:
+        process.env.NODE_ENV === "development"
+          ? { target: "pino-pretty", options: { colorize: true } }
+          : undefined,
+    },
     trustProxy: true,
   });
 
