@@ -57,7 +57,7 @@ export default function ProfilePage({ user }) {
               </div>
             </div>
           </div>
-          <a className="btn" href="#" onClick={(e)=>e.preventDefault()}>Edit Profile</a>
+          <button className="btn" onClick={(e)=>e.preventDefault()}>Edit Profile</button>
         </div>
 
         <div style={{ marginTop: 16 }}>
