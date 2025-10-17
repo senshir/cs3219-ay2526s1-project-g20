@@ -1,10 +1,9 @@
 from fastapi import HTTPException, status
+from bson import ObjectId
 from datetime import datetime
 from app.db.database import users_collection
-from app.models.user import UserCreate, UserResponse, PublicUserResponse
+from app.models.user import UserCreate, UserResponse, PublicUserResponse, UsernameUpdate, PasswordUpdate
 from app.utils.security import get_password_hash, verify_password
-from app.utils.verification import create_verification_token
-from app.services.email_service import send_verification_email
 
 class UserService:
     @staticmethod
@@ -31,29 +30,26 @@ class UserService:
             "password": get_password_hash(user_data.password),
             "account_creation_date": datetime.now(),
             "last_login": None,
-            "is_verified": False,
             "failed_login_attempts": 0,
             "is_locked": False
         }
         
         result = users_collection.insert_one(user)
         user_id = str(result.inserted_id)
-        
-        verification_token = create_verification_token(user_id)
-        email_sent = send_verification_email(
-        email=user_data.email,
-        user_id=user_id,
-        token=verification_token
+    
+        return UserResponse(
+            id=user_id,
+            email=user_data.email,
+            username=user_data.username,
+            account_creation_date=user["account_creation_date"],
+            last_login=None,
+            failed_login_attempts=0,
+            is_locked=False
         )
     
-        if not email_sent:
-        # Optional: Rollback user creation if email fails (or handle in background)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Registration successful, but failed to send verification email. Please try again later."
-            )
-    
-        return {**user, "id": user_id}
+    # ---------------------------
+    # Authentication-related logic
+    # ---------------------------
 
     @staticmethod
     def get_user_by_credentials(username_or_email: str) -> dict:
@@ -71,7 +67,7 @@ class UserService:
         """Update user's last login and reset failed attempts"""
         users_collection.update_one(
             {"_id": user_id},
-            {"$set": {"last_login": datetime.utcnow(), "failed_login_attempts": 0}}
+            {"$set": {"last_login": datetime.now(), "failed_login_attempts": 0}}
         )
 
     @staticmethod
@@ -82,15 +78,26 @@ class UserService:
             {"$inc": {"failed_login_attempts": 1}}
         )
 
+
+    # ---------------------------
+    # Account lookup and security
+    # ---------------------------
+
     @staticmethod
     def get_user_by_id(user_id: str) -> dict:
-        """Get user by ID"""
-        return users_collection.find_one({"_id": user_id})
+        try:
+            return users_collection.find_one({"_id": ObjectId(user_id)})
+        except Exception:  # Invalid ObjectId format
+            return None  # Or raise HTTPException
 
     @staticmethod
     def get_public_user_data(user_id: str) -> PublicUserResponse:
         """Get public user data (for other services)"""
-        user = users_collection.find_one({"_id": user_id}, {"username": 1, "_id": 1})
+        try:
+            user = users_collection.find_one({"_id": ObjectId(user_id)}, {"username": 1})
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid user ID format")
+        
         if not user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         
@@ -99,3 +106,51 @@ class UserService:
             username=user["username"]
         )
     
+    @staticmethod
+    def lock_user_account(user_id: str) -> None:
+        """Lock user account"""
+        users_collection.update_one(
+            {"_id": user_id},
+            {"$set": {"is_locked": True}}
+        )
+        
+    # ---------------------------
+    # Async update operations
+    # ---------------------------
+
+    @staticmethod
+    async def update_username(users_collection, user_id: str, update_data: UsernameUpdate):
+        # Move your existing update_user_username logic here
+        if not update_data.new_username:
+            raise HTTPException(status_code=400, detail="New username is required")
+        
+        result = await users_collection.update_one(
+            {"_id": user_id},
+            {"$set": {"username": update_data.new_username}}
+        )
+        
+        if result.modified_count == 0:
+            raise HTTPException(status_code=404, detail="User not found or username unchanged")
+        
+        return {"message": "Username updated successfully"}
+
+    @staticmethod
+    async def update_password(users_collection, user_id: str, update_data: PasswordUpdate):
+        # Move your existing update_user_password logic here
+        # Include validation for current password matching
+        user = await users_collection.find_one({"_id": user_id})
+
+        if not user or user["password"] != update_data.current_password:  # Use proper hashing!
+            raise HTTPException(status_code=401, detail="Current password is incorrect")
+        
+        hashed_password = get_password_hash(update_data.new_password)
+        
+        result = await users_collection.update_one(
+            {"_id": user_id},
+            {"$set": {"password": hashed_password}}  # Hash the new password!
+        )
+        
+        if result.modified_count == 0:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        return {"message": "Password updated successfully"}

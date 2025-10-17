@@ -26,14 +26,6 @@ class AuthService:
                 headers={"WWW-Authenticate": "Bearer"},
             )
         
-        # Check if account is verified
-        if not user.get("is_verified", False):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Please verify your email before logging in",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-        
         # Check if account is locked
         if user.get("is_locked", False):
             raise HTTPException(
