@@ -11,7 +11,9 @@ interface WSInitOptions {
   auth: AuthConfig;      // NEW: auth config injected from server.ts
 }
 
-const HEARTBEAT_MS = 30_000;
+const HEARTBEAT_MS = Number(process.env.HEARTBEAT_INTERVAL_MS ?? 30000);
+const HEARTBEAT_MULTIPLIER = Number(process.env.HEARTBEAT_TIMEOUT_MULTIPLIER ?? 10);
+
 
 export async function initWebsocketServer(
   httpServer: HttpServer,
@@ -27,7 +29,7 @@ export async function initWebsocketServer(
       const ctx = ws.__ctx;
       if (!ctx) return;
       const now = Date.now();
-      if (now - ctx.lastSeen > HEARTBEAT_MS * 2) {
+      if (now - ctx.lastSeen > HEARTBEAT_MS * HEARTBEAT_MULTIPLIER) {
         try { ws.close(4000, "heartbeat-timeout"); } catch {}
       } else {
         try { ws.send(JSON.stringify({ type: "PONG" } as ServerMessage)); } catch {}
