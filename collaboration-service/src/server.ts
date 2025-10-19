@@ -1,6 +1,7 @@
 import { createApp, AppConfig } from "./app";
 import { initWebsocketServer } from "./ws/websocketServer";
 import type { Server as HttpServer } from "http";
+import 'dotenv/config';
 
 function bool(v: string | undefined, def: boolean) {
   if (v === undefined) return def;
