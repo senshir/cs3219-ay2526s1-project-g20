@@ -1,0 +1,8 @@
+{
+    "AI": ["ML Basics","Search","Heuristics"],
+    "Cybersecurity": ["Crypto Basics","Hashing","Secure Protocols"],
+    "Trees": ["Binary Trees","BST","Heaps"],
+    "Graphs": ["BFS","DFS","Shortest Path"],
+    "DP": ["Recursion","Greedy","Divide & Conquer"]
+  }
+  
