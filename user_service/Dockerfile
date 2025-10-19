@@ -2,9 +2,12 @@
 FROM python:3.11-slim
 
 # Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1  # Prevent Python from writing .pyc files
-ENV PYTHONUNBUFFERED=1          # Ensure output is sent straight to terminal (helps with logging)
-ENV PIP_NO_CACHE_DIR=off        # Disable pip cache to reduce image size
+# Prevent Python from writing .pyc files
+ENV PYTHONDONTWRITEBYTECODE=1
+# Ensure output is sent straight to terminal (helps with logging)
+ENV PYTHONUNBUFFERED=1
+# Disable pip cache to reduce image size
+ENV PIP_NO_CACHE_DIR=off
 
 # Set the working directory in the container
 WORKDIR /app

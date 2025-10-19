@@ -124,7 +124,7 @@ class UserService:
         if not update_data.new_username:
             raise HTTPException(status_code=400, detail="New username is required")
         
-        result = await users_collection.update_one(
+        result = users_collection.update_one(
             {"_id": user_id},
             {"$set": {"username": update_data.new_username}}
         )
@@ -138,14 +138,14 @@ class UserService:
     async def update_password(users_collection, user_id: str, update_data: PasswordUpdate):
         # Move your existing update_user_password logic here
         # Include validation for current password matching
-        user = await users_collection.find_one({"_id": user_id})
+        user = users_collection.find_one({"_id": user_id})
 
         if not user or user["password"] != update_data.current_password:  # Use proper hashing!
             raise HTTPException(status_code=401, detail="Current password is incorrect")
         
         hashed_password = get_password_hash(update_data.new_password)
         
-        result = await users_collection.update_one(
+        result = users_collection.update_one(
             {"_id": user_id},
             {"$set": {"password": hashed_password}}  # Hash the new password!
         )
