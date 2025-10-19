@@ -1,19 +1,20 @@
+// src/ws/websocketServer.ts
 import { Server as HttpServer } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { RoomRegistry } from "../rooms/roomRegistry";
 import { makeContext } from "./connectionContext";
 import { ClientMessage, ServerMessage, safeParse } from "./messageTypes";
 import { extractTokenFromReq, verifyToken, AuthConfig, UserClaims } from "../auth/jwt";
+import { YjsManager, b64ToUint8 } from "../crdt/yjsManager";
 
 interface WSInitOptions {
   path: string;
-  logger?: any;          // Fastify logger (pino-compatible)
-  auth: AuthConfig;      // NEW: auth config injected from server.ts
+  logger?: any;
+  auth: AuthConfig;
 }
 
-const HEARTBEAT_MS = Number(process.env.HEARTBEAT_INTERVAL_MS ?? 30000);
+const HEARTBEAT_MS = Number(process.env.HEARTBEAT_INTERVAL_MS ?? 30_000);
 const HEARTBEAT_MULTIPLIER = Number(process.env.HEARTBEAT_TIMEOUT_MULTIPLIER ?? 10);
-
 
 export async function initWebsocketServer(
   httpServer: HttpServer,
@@ -21,9 +22,9 @@ export async function initWebsocketServer(
 ) {
   const wss = new WebSocketServer({ server: httpServer, path: options.path });
   const rooms = new RoomRegistry();
+  const y = new YjsManager({ logger: options.logger });
   const log = options.logger ?? console;
 
-  // Heartbeat
   setInterval(() => {
     wss.clients.forEach((ws: WebSocket & { __ctx?: any }) => {
       const ctx = ws.__ctx;
@@ -35,35 +36,25 @@ export async function initWebsocketServer(
         try { ws.send(JSON.stringify({ type: "PONG" } as ServerMessage)); } catch {}
       }
     });
+
+    // also sweep idle Yjs rooms
+    y.sweepIdle();
   }, HEARTBEAT_MS).unref();
 
   wss.on("connection", (ws, req) => {
-    // ---- NEW: authenticate the connection ----
+    // ---- authenticate ----
     const token = extractTokenFromReq(req);
-    if (!token) {
-      ws.close(4401, "unauthorized"); // 4401 = custom WS close code
-      return;
-    }
+    if (!token) return void ws.close(4401, "unauthorized");
 
     let claims: UserClaims;
-    try {
-      claims = verifyToken(token, options.auth);
-    } catch (err: any) {
-      log.warn({ err: err?.message }, "JWT verification failed");
-      ws.close(4401, "invalid-token");
-      return;
-    }
+    try { claims = verifyToken(token, options.auth); }
+    catch (err: any) { log.warn({ err: err?.message }, "JWT verification failed"); return void ws.close(4401, "invalid-token"); }
 
     const ctx = makeContext(ws);
     (ws as any).__ctx = ctx;
-    // Overwrite userId with the JWT identity
     ctx.userId = claims.userId;
     (ctx as any).claims = claims;
-
-    log.info(
-      { ip: req.socket.remoteAddress, userId: ctx.userId },
-      "WS connected (authenticated)"
-    );
+    log.info({ ip: req.socket.remoteAddress, userId: ctx.userId }, "WS connected (auth)");
 
     ws.on("message", (buf) => {
       ctx.lastSeen = Date.now();
@@ -78,24 +69,26 @@ export async function initWebsocketServer(
           return send(ws, { type: "PONG" });
 
         case "JOIN_ROOM": {
-          const { roomId } = msg;
-          if (!roomId) {
-            return send(ws, { type: "ERROR", code: "ROOM_ID_REQUIRED", message: "roomId is required" });
-          }
+          const roomId = (msg as any).roomId;
+          if (!roomId) return send(ws, { type: "ERROR", code: "ROOM_ID_REQUIRED", message: "roomId is required" });
 
-          // ---- NEW: optional room claim enforcement ----
+          // optional enforcement
           if (options.auth.requireRoomClaim && claims.roomId && claims.roomId !== roomId) {
             return send(ws, { type: "ERROR", code: "FORBIDDEN_ROOM", message: "Not allowed to join this room" });
           }
 
-          // leave previous room if any
-          if (ctx.roomId) rooms.leave(ctx.roomId, ws);
-
+          // leave previous
+          if (ctx.roomId) {
+            rooms.leave(ctx.roomId, ws);
+            y.leave(ctx.roomId, ws);
+          }
           ctx.roomId = roomId;
-          const participants = rooms.join(roomId, ws);
-          send(ws, { type: "JOINED", roomId, participants });
 
-          rooms.broadcast(roomId, { type: "AWARENESS_BROADCAST", from: ctx.userId, payload: { event: "join" } }, ws);
+          // join registries
+          const participants = rooms.join(roomId, ws);
+          y.join(roomId, ws, ctx.userId);
+
+          send(ws, { type: "JOINED", roomId, participants });
           return;
         }
 
@@ -103,21 +96,25 @@ export async function initWebsocketServer(
           if (!ctx.roomId) return;
           const prev = ctx.roomId;
           rooms.leave(prev, ws);
+          y.leave(prev, ws);
           ctx.roomId = undefined;
           send(ws, { type: "LEFT", roomId: prev });
-          rooms.broadcast(prev, { type: "AWARENESS_BROADCAST", from: ctx.userId, payload: { event: "leave" } }, ws);
           return;
         }
 
-        case "AWARENESS_UPDATE": {
+        case "YJS_UPDATE": {
           if (!ctx.roomId) return;
-          rooms.broadcast(ctx.roomId, { type: "AWARENESS_BROADCAST", from: ctx.userId, payload: msg.payload }, ws);
+          const payloadB64 = (msg as any).payloadB64;
+          if (!payloadB64) return;
+          y.applyUpdate(ctx.roomId, b64ToUint8(payloadB64), { userId: ctx.userId });
           return;
         }
 
-        case "TEXT_UPDATE": {
+        case "AWARENESS_SET": {
           if (!ctx.roomId) return;
-          rooms.broadcast(ctx.roomId, { type: "TEXT_BROADCAST", from: ctx.userId, payload: msg.payload }, ws);
+          const payloadB64 = (msg as any).payloadB64;
+          if (!payloadB64) return;
+          y.applyAwareness(ctx.roomId, b64ToUint8(payloadB64), { userId: ctx.userId });
           return;
         }
 
@@ -128,11 +125,12 @@ export async function initWebsocketServer(
 
     ws.on("close", () => {
       if ((ws as any).__ctx?.roomId) {
-        const r = (ws as any).__ctx.roomId;
-        rooms.leave(r, ws);
-        rooms.broadcast(r, { type: "AWARENESS_BROADCAST", from: (ws as any).__ctx.userId, payload: { event: "leave" } }, ws);
+        const rid = (ws as any).__ctx.roomId;
+        rooms.leave(rid, ws);
+        y.leave(rid, ws);
       } else {
         rooms.leaveAll(ws);
+        y.leaveAll(ws);
       }
       log.info({ userId: ctx.userId }, "WS disconnected");
     });
@@ -142,7 +140,7 @@ export async function initWebsocketServer(
     });
   });
 
-  log.info({ path: options.path }, "WebSocket server ready (auth enabled)");
+  log.info({ path: options.path }, "WebSocket server ready (auth + Yjs)");
   return wss;
 }
 
