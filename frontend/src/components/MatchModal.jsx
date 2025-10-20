@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { api } from "../lib/api"; // ← from the helper we set up earlier
+import { api } from "../lib/api";
 
 export default function MatchModal({ onClose, onMatched }) {
   const [topic, setTopic] = useState("DP");
@@ -15,73 +15,38 @@ export default function MatchModal({ onClose, onMatched }) {
     setPhase("queue");
     setMsg("Looking for a partner…");
     try {
-      // Adjust path to whatever your match service exposes
-      const res = await api.post("match", "/match/find", {
-        json: { topic, difficulty },
-        token: localStorage.getItem("pp_token") || undefined
-      });
-
+      const res = await api.post("match", "/match/find", { json: { topic, difficulty } });
       if (res?.partnerName || res?.roomId) {
         setPhase("matched");
         setMsg(`Matched with ${res.partnerName || "a partner"}!`);
         onMatched?.(res);
         return;
       }
-      if (res?.ticket) {
-        setTicket(res.ticket);
-        startPolling(res.ticket);
-      } else {
-        setPhase("error");
-        setMsg("Matching response not understood. Check backend path/format.");
-      }
-    } catch (e) {
-      setPhase("error");
-      setMsg("Match failed: " + e.message);
-    }
+      if (res?.ticket) { setTicket(res.ticket); startPolling(res.ticket); return; }
+      setPhase("error"); setMsg("Matching response not understood.");
+    } catch (e) { setPhase("error"); setMsg("Match failed: " + e.message); }
   }
 
   function startPolling(t) {
-    let elapsed = 0;
     pollRef.current = setInterval(async () => {
-      elapsed += 2000;
       try {
         const status = await api.get("match", `/match/status?ticket=${encodeURIComponent(t)}`);
         if (status?.partnerName || status?.roomId) {
-          clearInterval(pollRef.current);
-          pollRef.current = null;
-          setPhase("matched");
-          setMsg(`Matched with ${status.partnerName || "a partner"}!`);
+          clearInterval(pollRef.current); pollRef.current = null;
+          setPhase("matched"); setMsg(`Matched with ${status.partnerName || "a partner"}!`);
           onMatched?.(status);
-        } else {
-          setMsg("Still looking…");
-        }
+        } else { setMsg("Still looking…"); }
       } catch (e) {
-        setPhase("error");
-        setMsg("Polling error: " + e.message);
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-      if (elapsed >= 60000 && pollRef.current) { // 60s timeout
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-        setPhase("idle");
-        setMsg("No match found yet. Try again or widen preferences.");
+        setPhase("error"); setMsg("Polling error: " + e.message);
+        clearInterval(pollRef.current); pollRef.current = null;
       }
     }, 2000);
   }
 
   async function cancelQueue() {
-    if (pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
-    if (ticket) {
-      try {
-        await api.post("match", "/match/cancel", { json: { ticket } });
-      } catch { /* best-effort cancel */ }
-    }
-    setPhase("idle");
-    setMsg("");
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    if (ticket) { try { await api.post("match", "/match/cancel", { json: { ticket } }); } catch {} }
+    setPhase("idle"); setMsg("");
   }
 
   return (
@@ -90,19 +55,13 @@ export default function MatchModal({ onClose, onMatched }) {
         <div>
           <label className="label">Topic</label>
           <select className="select" value={topic} onChange={e=>setTopic(e.target.value)}>
-            <option>DP</option>
-            <option>Arrays</option>
-            <option>Strings</option>
-            <option>Graphs</option>
-            <option>Trees</option>
+            <option>DP</option><option>Arrays</option><option>Strings</option><option>Graphs</option><option>Trees</option>
           </select>
         </div>
         <div>
           <label className="label">Difficulty</label>
           <select className="select" value={difficulty} onChange={e=>setDifficulty(e.target.value)}>
-            <option>Easy</option>
-            <option>Medium</option>
-            <option>Hard</option>
+            <option>Easy</option><option>Medium</option><option>Hard</option>
           </select>
         </div>
 
@@ -114,12 +73,8 @@ export default function MatchModal({ onClose, onMatched }) {
         )}
 
         <div className="row" style={{ gap: 8, marginTop: 6 }}>
-          {phase !== "queue" && (
-            <button className="btn btn--dark" onClick={startMatching}>⚡ Start Matching</button>
-          )}
-          {phase === "queue" && (
-            <button className="btn" onClick={cancelQueue}>Cancel</button>
-          )}
+          {phase !== "queue" && <button className="btn btn--dark" onClick={startMatching}>⚡ Start Matching</button>}
+          {phase === "queue" && <button className="btn" onClick={cancelQueue}>Cancel</button>}
           <button className="btn" onClick={onClose} style={{ marginLeft: "auto" }}>Close</button>
         </div>
       </div>
