@@ -1,4 +1,6 @@
-import React from "react";
+import React, { useState } from "react";
+import Modal from "../components/Modal.jsx";
+import MatchModal from "../components/MatchModal.jsx";
 
 function Badge({ children, tone }) {
   const cls =
@@ -9,6 +11,7 @@ function Badge({ children, tone }) {
 }
 
 function Stat({ label, value }) {
+  const [showMatch, setShowMatch] = useState(false);
   return (
     <div className="stat">
       <div className="v">{value}</div>
@@ -25,11 +28,23 @@ export default function Dashboard() {
         <p className="p-muted">Ready to continue your coding interview preparation?</p>
         <div className="row" style={{ gap: 16 }}>
           <button className="btn btn--dark">&lt;/&gt;&nbsp; Practice Problems</button>
-          <button className="btn">👥&nbsp; Find Practice Partner</button>
+          <button className="btn" onClick={() => setShowMatch(true)}>⚡&nbsp; Start Matching</button>
           <button className="btn">📅&nbsp; Schedule Interview</button>
           <button className="btn">📚&nbsp; Study Resources</button>
         </div>
       </section>
+      {showMatch && (
+        <Modal title="Start Matching" onClose={() => setShowMatch(false)} width={520}>
+          <MatchModal
+            onClose={() => setShowMatch(false)}
+            onMatched={(info) => {
+            // You can navigate to a room, or just notify for now
+              alert("Matched! " + JSON.stringify(info));
+              setShowMatch(false);
+            }}
+          />
+        </Modal>
+      )}
 
       <section className="grid-row">
         <div className="card">
