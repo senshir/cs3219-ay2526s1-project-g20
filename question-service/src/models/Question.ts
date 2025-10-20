@@ -36,6 +36,24 @@ const QuestionSchema: Schema = new Schema(
       type: String,
       trim: true,
     },
+    images: [
+      {
+        url: {
+          type: String,
+          required: true,
+          trim: true,
+        },
+        alt: {
+          type: String,
+          required: true,
+          trim: true,
+        },
+        caption: {
+          type: String,
+          trim: true,
+        },
+      },
+    ],
     examples: [
       {
         input: {
