@@ -5,6 +5,7 @@ import Dashboard from "./pages/Dashboard.jsx";
 import Problems from "./pages/Problems.jsx";
 import Interviews from "./pages/Interviews.jsx";
 import ProfilePage from "./pages/ProfilePage.jsx";
+import Matching from "./pages/Matching.jsx";
 
 import Modal from "./components/Modal.jsx";
 import LoginModal from "./pages/Login.jsx";
@@ -94,6 +95,7 @@ export default function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/problems" element={<Problems />} />
           <Route path="/interviews" element={<Interviews />} />
+          <Route path="/matching" element={<Matching />} />
           {/* Block direct access when not authed (defensive) */}
           <Route
             path="/profile"

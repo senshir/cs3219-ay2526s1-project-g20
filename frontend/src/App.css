@@ -145,12 +145,9 @@ a.btn { text-decoration: none; }
   background: var(--ink);
   color: #fff; /* stays white */
 }
-.spin {
-  width: 14px; height: 14px;
-  border: 2px solid #e5e7eb;
-  border-top-color: #111827;
-  border-radius: 50%;
-  animation: sp 0.8s linear infinite;
+/* Bigger call-to-action button */
+.btn--xl {
+  padding: 14px 20px;
+  font-size: 15px;
+  font-weight: 600;
 }
-@keyframes sp { to { transform: rotate(360deg); } }
-
