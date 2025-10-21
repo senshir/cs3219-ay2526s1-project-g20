@@ -140,10 +140,12 @@ Creates a new match request for the user.
   "topics": ["AI", "Trees"]
 }
 ```
-Rules:
-- Must select **between 1 and 3 total “categories”**.  
+
+**Rules:**
+- Must select **between 1 and 3 total “categories.”**  
   (Difficulty counts as 1; each topic counts as 1.)
 - If a dimension is omitted, defaults to **all** values for that dimension.
+
 **Returns:**
 ```json
 { "ok": true }
@@ -152,6 +154,11 @@ or
 ```json
 { "error": "Please select between 1 and 3 categories in total." }
 ```
+
+> 🧩 **Question Service Integration**  
+> - The Matching Service fetches the canonical list of topics and difficulties from the **Question Service** automatically.  
+> - When users create a request, their chosen `difficulty` and `topics` are validated against these lists.  
+> - Stored fields (`difficulty`, `topics`) can be read later via `/match/status` to request or display corresponding questions.
 
 ---
 
@@ -176,6 +183,10 @@ If the user has no active request:
 { "status": "NONE" }
 ```
 
+> 🧭 **Used by Question & Collaboration Services**  
+> - **Question Service:** can read `difficulty` and `topics` to recommend or assign relevant questions for the pair.  
+> - **Collaboration Service:** can read `pairId` and later `sessionId` once created to fetch session context.
+
 ---
 
 ### `POST /match/accept`
@@ -196,6 +207,18 @@ or
 { "error": "Pair not found" }
 ```
 
+> 🤝 **Collaboration Service Integration**  
+> - Once **both** users accept, the Matching Service automatically calls  
+>   `createSession({ participants: [userA, userB] })` in the Collaboration Service.  
+> - The resulting `sessionId` is stored in Redis and visible via `/match/status`.  
+> - Collaboration Service can fetch session data using that ID:  
+>   ```json
+>   {
+>     "status": "SESSION_READY",
+>     "sessionId": "collab_9f12a38e"
+>   }
+>   ```
+
 ---
 
 ### `POST /match/decline`
@@ -211,6 +234,9 @@ Declines a match. The other user is requeued automatically.
 ```json
 { "ok": true }
 ```
+
+> - When a user declines, their partner is **requeued automatically** using their stored difficulty/topics.  
+> - Collaboration Service does **not** get triggered unless both users accept.
 
 ---
 
@@ -228,7 +254,7 @@ or
 ```
 
 - `"same"` → Re-enqueues with the same criteria  
-- `"broaden"` → Adds sibling topics and widens difficulty range
+- `"broaden"` → Relaxes **difficulty only** (topics remain fixed)
 
 **Returns:**
 ```json
@@ -242,6 +268,9 @@ or
 }
 ```
 
+> 🔁 **Note:** Topic relaxation has been removed — only difficulty is broadened.  
+> This aligns with Question Service’s canonical topic list.
+
 ---
 
 ### `POST /match/cancel`
@@ -253,6 +282,16 @@ Removes user from all buckets and clears their request record.
 ```json
 { "ok": true }
 ```
+
+---
+
+### 🔍 Summary of Service Integrations
+
+| Service | Consumes / Affected Endpoint | Data Shared or Exposed | Purpose |
+|----------|-----------------------------|------------------------|----------|
+| **User Service** | `/match/me/username` | `id`, `username` | Auth & profile verification |
+| **Question Service** | `/match/status` | `difficulty`, `topics[]` | Fetch or assign relevant question |
+| **Collaboration Service** | `/match/accept` + `/match/status` | `userId[]`, `pairId`, `sessionId` | Create and manage live coding sessions |
 
 ---
 
