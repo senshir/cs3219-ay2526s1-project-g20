@@ -2,10 +2,11 @@
 
 A minimal matching microservice that pairs two users for coding practice based on **difficulty** and **topic**. Built with **Node.js (Express)**, **Redis**, and **Docker**.
 
-- 🚦 **Criteria**: difficulty (`Easy | Medium | Hard`) and topics (e.g., `AI`, `Cybersecurity`, …)
+- 🚦 **Criteria**: The list of topics and difficulties is retrieved at runtime from the **Question Service**
 - 🪣 **Buckets model**: users are queued in FIFO “buckets” keyed by `(difficulty, topic)`
 - 🤝 **Handshake**: once paired, both must accept within a time window
 - 🧹 **Sweeper**: background job expires stale queue items and timed-out handshakes
+- 🔐 **Identity:** JWT `sub` (userId) from **User Service** is the canonical identifier.
 
 ---
 
@@ -139,7 +140,10 @@ Creates a new match request for the user.
   "topics": ["AI", "Trees"]
 }
 ```
-
+Rules:
+- Must select **between 1 and 3 total “categories”**.  
+  (Difficulty counts as 1; each topic counts as 1.)
+- If a dimension is omitted, defaults to **all** values for that dimension.
 **Returns:**
 ```json
 { "ok": true }
@@ -257,15 +261,43 @@ Removes user from all buckets and clears their request record.
 ```
 matching-service/
 ├─ src/
-│  ├─ server.js             # Express server + JWT middleware + routes
-│  ├─ matchManager.js       # Core matching logic + Redis keys + sweeper
-│  ├─ collabClient.js       # createSession() stub (integration with collab service)
-│  └─ topicFamilies.json    # Topic “siblings” used when broadening search
-├─ package.json
-├─ Dockerfile
-├─ .dockerignore
-├─ .env
-└─ README.md
+│  ├─ server.js                  # Express bootstrap, mounts /match, starts sweeper
+│  │
+│  ├─ routes/
+│  │  └─ index.js                # All HTTP routes (protected by auth middleware)
+│  │
+│  ├─ middleware/
+│  │  └─ auth.js                 # JWT verification middleware; sets req.user
+│  │
+│  ├─ services/
+│  │  ├─ matchManager.js         # Core matching logic (queues, pairing, sweeper)
+│  │  └─ collabClient.js         # Stub to create collaboration sessions after a match
+│  │
+│  ├─ clients/
+│  │  ├─ userClient.js           # Communicates with User Service (/profile, /public)
+│  │  └─ questionClient.js       # Retrieves canonical topics & difficulties from Question Service
+│  │
+│  ├─ dev/
+│  │  ├─ makeDevToken.js         # Utility script to generate local HS256 test tokens
+│  │  │
+│  │  ├─ mock/                   # Local mock services for isolated testing
+│  │  │  ├─ mockUserService.js
+│  │  │  └─ mockQuestionService.js
+│  │  │
+│  │  └─ test/                   # Integration & workflow test scripts
+│  │     ├─ testMatching.js
+│  │     └─ testUserEndpoint.js
+│  │
+│  └─ (optional future folders)  # e.g., utils/, config/, etc.
+│
+├─ .env                          # Local environment configuration
+├─ .env.example                  # Example environment file for setup reference
+├─ .dockerignore                 # Ignore rules for Docker build context
+├─ Dockerfile                    # Multi-stage build (Node 20 Alpine)
+├─ package.json                  # Node project manifest
+├─ package-lock.json             # Dependency lock file
+├─ .gitignore                    # Git ignore rules
+└─ README.md                     # Project documentation (this file)
 ```
 
 ---
@@ -290,6 +322,13 @@ ACCEPT_WINDOW_SECS=25
 
 # Allowed topics
 TOPICS=AI,Cybersecurity,Trees,Graphs,DP
+
+# Question service
+QUESTIONS_SVC_BASE=http://question-service:3001
+QS_CACHE_TTL_MS=300000
+
+# User service
+USERS_SVC_BASE=http://user-service:8000
 ```
 
 ---
@@ -303,6 +342,7 @@ npm ci
 
 2️⃣ **Start Redis**
 ```bash
+npm ci
 # macOS (Homebrew)
 brew install redis
 brew services start redis
@@ -321,18 +361,9 @@ node src/server.js
 
 ## Run with Docker
 
-**Build the image:**
 ```bash
 docker build -t peerprep-matching:dev .
-```
-
-**Run the container:**
-```bash
-docker run --name matching \
-  --rm -p 3001:3001 \
-  --env-file .env \
-  -e REDIS_URL=redis://host.docker.internal:6379 \
-  peerprep-matching:dev
+docker run --rm -p 3001:3001 --env-file .env peerprep-matching:dev
 ```
 
 > 💡 Use `-d` to run in background:  

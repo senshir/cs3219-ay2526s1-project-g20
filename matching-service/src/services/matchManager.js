@@ -1,6 +1,7 @@
 import fs from 'fs';
 import Redis from 'ioredis';
 import { createSession } from './collabClient.js';
+import { getQuestionMeta } from '../clients/questionClient.js';
 
 /**
  * ============================
@@ -14,20 +15,15 @@ import { createSession } from './collabClient.js';
  * - A background sweeper enforces TTL of queued requests and handshake expiry of pairs.
  *
  * Data structures in Redis (all plain strings):
- *   Q:<diff>:<topic>        (LIST)  FIFO queue of usernames for that bucket
- *   UB:<username>           (SET)   All bucket keys this user was inserted into (for cleanup)
- *   R:<username>            (HASH)  Request state for the user (status, criteria, pairId, timestamps, etc.)
+ *   Q:<diff>:<topic>        (LIST)  FIFO queue of userId for that bucket
+ *   UB:<userId>             (SET)   All bucket keys this user was inserted into (for cleanup)
+ *   R:<userId>              (HASH)  Request state for the user (status, criteria, pairId, timestamps, etc.)
  *   PAIR:<pairId>           (HASH)  Pair record for a pending handshake (u1, u2, aAccepted, bAccepted, expiresAt)
- *   IDX:ACTIVE_USERS        (SET)   Usernames with active requests (QUEUED or similar), used by the sweeper
+ *   IDX:ACTIVE_USERS        (SET)   UserId with active requests (QUEUED or similar), used by the sweeper
  *   IDX:ACTIVE_PAIRS        (SET)   PairIds that are still pending, used by the sweeper
  */
 
  // --------- Config & Data ---------
-
-// Topic “families” used when we relax topic criteria (e.g., add siblings)
-const topicFamilies = JSON.parse(
-  fs.readFileSync(new URL('./topicFamilies.json', import.meta.url))
-);
 
 // Redis connection. In Docker, pass REDIS_URL (e.g., redis://redis:6379)
 const redis = new Redis(process.env.REDIS_URL || 'redis://127.0.0.1:6379');
@@ -41,12 +37,10 @@ const SWEEP = Number(process.env.SWEEPER_INTERVAL_SECS || 5);
 const ACCEPT_WIN = Number(process.env.ACCEPT_WINDOW_SECS || 25);
 
 // Allowable topics and difficulties
-const ALL_TOPICS = (process.env.TOPICS || 'AI,Cybersecurity,Trees,Graphs,DP')
-  .split(',')
-  .map(s => s.trim())
-  .filter(Boolean);
-
-const DIFFS = ['Easy', 'Medium', 'Hard'];
+async function getCanonicalLists(bearerToken) {
+  const { difficulties, topics } = await getQuestionMeta(bearerToken);
+  return { DIFFS: difficulties, ALL_TOPICS: topics };
+}
 
 
 // --------- Redis Key Helpers ---------
@@ -55,10 +49,10 @@ const DIFFS = ['Easy', 'Medium', 'Hard'];
 function bucketKey(diff, topic) { return `Q:${diff}:${topic}`; }
 
 /** Set of all bucket keys a user has been added to (so we can LREM them later) */
-function userBucketsKey(username) { return `UB:${username}`; }
+function userBucketsKey(userId) { return `UB:${userId}`; }
 
 /** User’s request record (status, timestamps, last criteria, etc.) */
-function reqKey(username) { return `R:${username}`; }
+function reqKey(userId) { return `R:${userId}`; }
 
 /** Pair record (two users + handshake state + expiry) */
 function pairKey(pairId) { return `PAIR:${pairId}`; }
@@ -78,7 +72,7 @@ const ACTIVE_PAIRS = 'IDX:ACTIVE_PAIRS';
  * - only topic(s) selected (go into all difficulties of those topics), or
  * - both selected (Cartesian product).
  */
-function buildBuckets({ difficulty, topics }) {
+function buildBuckets({ difficulty, topics }, DIFFS, ALL_TOPICS) {
   const diffs = difficulty ? [difficulty] : DIFFS;
   const tps = (topics && topics.length) ? topics : ALL_TOPICS;
   const keys = [];
@@ -86,52 +80,105 @@ function buildBuckets({ difficulty, topics }) {
   return keys;
 }
 
+
 /**
- * Enqueue the user into all relevant buckets (by username).
- * Also store their criteria & timestamps in R:<username>, and track them in ACTIVE_USERS.
+ * Enqueue the user into all relevant buckets (by userId).
+ * Also store their criteria & timestamps in R:<userId>, and track them in ACTIVE_USERS.
  */
-async function enqueueByCriteria(username, { difficulty, topics }, seniorityTs) {
-  const keys = buildBuckets({ difficulty, topics });
-
-  // For each bucket list, rpush the username (FIFO)
+async function enqueueByCriteria(userId, { difficulty, topics }, seniorityTs, DIFFS, ALL_TOPICS) {
+  const keys = buildBuckets({ difficulty, topics }, DIFFS, ALL_TOPICS);
   for (const k of keys) {
-    await redis.rpush(k, String(username));
+    await redis.rpush(k, String(userId));
   }
-
-  // Track which buckets we inserted into (for later cleanup)
-  await redis.sadd(userBucketsKey(username), keys);
-
-  // Persist “request state” for the user (used in status, requeue, and sweeper)
-  await redis.hset(reqKey(username), {
+  await redis.sadd(userBucketsKey(userId), keys);
+  await redis.hset(reqKey(userId), {
     status: 'QUEUED',
-    createdAt: Date.now(),        // when this queue attempt was made
-    seniorityTs,                  // original timestamp for fairness on requeue
+    createdAt: Date.now(),
+    seniorityTs,
     difficulty: difficulty || '',
     topics: JSON.stringify(topics || [])
   });
-
-  await redis.sadd(ACTIVE_USERS, String(username));
+  await redis.sadd(ACTIVE_USERS, String(userId));
   return keys;
 }
 
-/**
- * Remove the user from all bucket lists (LREM username from each Q:... list)
- * and clear the UB:<username> set.
+/** 
+ * Requeue a user using their last stored criteria, preserving original seniority timestamp.
+ * Used in declineMatch and sweeper expiry handling.
  */
-async function cleanupUserFromBuckets(username) {
-  const setKey = userBucketsKey(username);
+async function requeueFromStoredCriteria(userId, bearerToken) {
+  const r = await redis.hgetall(reqKey(userId));
+  const seniorityTs = Number(r?.seniorityTs || Date.now());
+  const { difficulty, topics } = await getStoredCriteria(userId);
+
+  const { DIFFS, ALL_TOPICS } = await getCanonicalLists(bearerToken);
+
+  const keys = await enqueueByCriteria(userId, { difficulty, topics }, seniorityTs, DIFFS, ALL_TOPICS);
+  await tryMatch(userId, keys);
+}
+
+/**
+ * retryRequest(userId, mode):
+ * - mode === 'same': re-enqueue with the same criteria.
+ * - mode === 'broaden': relax difficulties by +-1
+ **/
+export async function retryRequest(userId, mode = 'same', bearerToken) {
+  const r = await redis.hgetall(reqKey(userId));
+  if (!r || !r.status) return { error: 'No request' };
+
+  await cleanupUserFromBuckets(userId);
+
+  const { difficulty, topics } = await getStoredCriteria(userId);
+  const seniorityTs = Number(r.seniorityTs) || Date.now();
+
+  const { DIFFS, ALL_TOPICS } = await getCanonicalLists(bearerToken);
+
+  if (mode === 'same') {
+    const keys = await enqueueByCriteria(userId, { difficulty, topics }, seniorityTs, DIFFS, ALL_TOPICS);
+    await tryMatch(userId, keys);
+    return { ok: true, mode: 'same' };
+  }
+
+  // Broaden: relax difficulty only
+  let newDifficulty = difficulty;
+  if (!difficulty || Math.random() < 0.5) {
+    newDifficulty = relaxDifficulty(difficulty, DIFFS) || difficulty;
+  }
+
+  const keys = await enqueueByCriteria(
+    userId,
+    { difficulty: newDifficulty, topics },
+    seniorityTs,
+    DIFFS,
+    ALL_TOPICS
+  );
+  await tryMatch(userId, keys);
+
+  return {
+    ok: true,
+    mode: 'broaden',
+    applied: { difficulty: newDifficulty || '(all)', topics }
+  };
+}
+
+/**
+ * Remove the user from all bucket lists (LREM userId from each Q:... list)
+ * and clear the UB:<userId> set.
+ */
+async function cleanupUserFromBuckets(userId) {
+  const setKey = userBucketsKey(userId);
   const keys = await redis.smembers(setKey);
   if (keys?.length) {
     for (const k of keys) {
-      await redis.lrem(k, 0, String(username));
+      await redis.lrem(k, 0, String(userId));
     }
   }
   await redis.del(setKey);
 }
 
-/** Read last criteria stored in R:<username> (used for requeue/retry flows). */
-async function getStoredCriteria(username) {
-  const r = await redis.hgetall(reqKey(username));
+/** Read last criteria stored in R:<userId> (used for requeue/retry flows). */
+async function getStoredCriteria(userId) {
+  const r = await redis.hgetall(reqKey(userId));
   const difficulty = r?.difficulty || '';
   let topics = [];
   try { topics = JSON.parse(r?.topics || '[]'); } catch { topics = []; }
@@ -142,7 +189,7 @@ async function getStoredCriteria(username) {
 // --------- Criteria Relaxation Helpers (F1.2.3) ---------
 
 /** Adjacent difficulty helper: returns neighbors of a given diff (e.g., Medium → [Easy, Hard]) */
-function adjacentDifficulty(diff) {
+function adjacentDifficulty(diff, DIFFS) {
   const idx = DIFFS.indexOf(diff);
   if (idx < 0) return [];
   const out = [];
@@ -152,29 +199,11 @@ function adjacentDifficulty(diff) {
 }
 
 /** One-step difficulty relax: prefer the “easier” neighbor (or all if none selected) */
-function relaxDifficulty(difficulty) {
+function relaxDifficulty(difficulty, DIFFS) {
   if (!difficulty) return '';     // empty means "all difficulties"
-  const adj = adjacentDifficulty(difficulty);
+  const adj = adjacentDifficulty(difficulty, DIFFS);
   return adj[0] || difficulty;
 }
-
-/**
- * Topic relaxation: add sibling topics (from topicFamilies) up to a cap (default 3 total).
- * Keeps the total list small, satisfying the “max 3 categories” constraint.
- */
-function relaxTopics(topics, cap = 3) {
-  const out = [...topics];
-  for (const t of topics) {
-    const sibs = (topicFamilies[t] || []).filter(s => !out.includes(s));
-    for (const s of sibs) {
-      if (out.length >= cap) break;
-      out.push(s);
-    }
-    if (out.length >= cap) break;
-  }
-  return out;
-}
-
 
 // --------- Matching Core ---------
 
@@ -183,36 +212,36 @@ function relaxTopics(topics, cap = 3) {
  * For each of my bucket keys, peek the head (oldest) entry.
  * If it’s me, scan a small window to find the first non-self.
  * Use a Redis NX lock to avoid race conditions if multiple servers try to match the same pair.
- * If we win, remove both users from all buckets, create a PAIR with expiry, and set both to PENDING_ACCEPT.
+ * If we win, remove both users from all their buckets, create a PAIR with expiry, and set both to PENDING_ACCEPT.
  */
-async function tryMatch(username, myKeys) {
+async function tryMatch(userId, myKeys) {
   for (const k of myKeys) {
     let other = await redis.lindex(k, 0);
     if (!other) continue;
 
     // If head is me, look slightly deeper for the first non-me
-    if (String(other) === String(username)) {
+    if (String(other) === String(userId)) {
       const window = await redis.lrange(k, 0, 9);
-      other = window.find(u => u !== String(username));
+      other = window.find(u => u !== String(userId));
       if (!other) continue;
     }
 
     // Lock the pair in a stable (sorted) order to prevent duplicate matches across instances
-    const [a, b] = [String(username), String(other)].sort();
+    const [a, b] = [String(userId), String(other)].sort();
     const lockKey = `LOCK:match:${a}:${b}`;
     const got = await redis.set(lockKey, '1', 'NX', 'EX', 30); // 30s lock TTL is enough for handshake setup
     if (got !== 'OK') continue; // someone else grabbed it
 
     // Remove both from all their buckets
     await cleanupUserFromBuckets(other);
-    await cleanupUserFromBuckets(username);
+    await cleanupUserFromBuckets(userId);
 
     // Create the pair with a handshake expiry
     const pairId = `${a}__${b}__${Date.now()}`;    // readable & unique
     const expiresAt = Date.now() + ACCEPT_WIN * 1000;
 
     await redis.hset(pairKey(pairId), { u1: a, u2: b, aAccepted: 0, bAccepted: 0, expiresAt });
-    await redis.hset(reqKey(username), { status: 'PENDING_ACCEPT', pairId, expiresAt });
+    await redis.hset(reqKey(userId), { status: 'PENDING_ACCEPT', pairId, expiresAt });
     await redis.hset(reqKey(other),    { status: 'PENDING_ACCEPT', pairId, expiresAt });
     await redis.sadd(ACTIVE_PAIRS, pairId);
 
@@ -221,61 +250,59 @@ async function tryMatch(username, myKeys) {
   }
 }
 
-/** Requeue a user using their last stored criteria, preserving original seniority timestamp. */
-async function requeueFromStoredCriteria(username) {
-  const r = await redis.hgetall(reqKey(username));
-  const seniorityTs = Number(r?.seniorityTs || Date.now());
-  const { difficulty, topics } = await getStoredCriteria(username);
-  const keys = await enqueueByCriteria(username, { difficulty, topics }, seniorityTs);
-  await tryMatch(username, keys);
-}
-
-
 // --------- Public API (called by your Express routes) ---------
 
 /**
- * createRequest(username, criteria):
+ * createRequest(userId, criteria):
  * - Validates 1–3 total “categories” (difficulty counts as 1, each topic counts as 1).
  * - Clears old state (if any).
  * - Enqueues into all relevant buckets.
  * - Attempts immediate match.
  */
-export async function createRequest(username, { difficulty, topics = [] }) {
+export async function createRequest(userId, { difficulty, topics = [] }, bearerToken) {
+  // Fetch canonical lists from Question Service
+  const { DIFFS, ALL_TOPICS } = await getCanonicalLists(bearerToken);
+
   const total = (difficulty ? 1 : 0) + (topics?.length || 0);
   if (total < 1 || total > 3) {
     return { error: 'Please select between 1 and 3 categories in total.' };
   }
 
-  // Optional explicit validation against allowed values
-  if (difficulty && !DIFFS.includes(difficulty)) {
-    return { error: `Invalid difficulty: ${difficulty}` };
+  // Normalize difficulty case to an exact entry if you want (optional):
+  if (difficulty) {
+    // strict check
+    if (!DIFFS.includes(difficulty)) {
+      return { error: `Invalid difficulty: ${difficulty}` };
+    }
   }
+
   const invalidTopics = (topics || []).filter(t => !ALL_TOPICS.includes(t));
   if (invalidTopics.length) {
     return { error: `Invalid topics: ${invalidTopics.join(', ')}` };
   }
 
-  await cancelMyRequest(username);
+  await cancelMyRequest(userId);
 
-  const seniorityTs = Date.now(); // remember when this user first tried (fairness on requeue)
-  const keys = await enqueueByCriteria(username, { difficulty, topics }, seniorityTs);
-  await tryMatch(username, keys);
+  const seniorityTs = Date.now();
+  const keys = await enqueueByCriteria(userId, { difficulty, topics }, seniorityTs, DIFFS, ALL_TOPICS);
+  await tryMatch(userId, keys);
   return { ok: true };
 }
 
+
 /**
- * acceptMatch(username, pairId):
+ * acceptMatch(userId, pairId):
  * - Marks the caller’s side as accepted.
  * - If both sides accepted → create collaboration session → set both to SESSION_READY and clean up pair.
  */
-export async function acceptMatch(username, pairId) {
+export async function acceptMatch(userId, pairId) {
   const pK = pairKey(pairId);
   const p = await redis.hgetall(pK);
   if (!p || !p.u1) return { error: 'Pair not found' };
 
   const field =
-    (String(username) === p.u1) ? 'aAccepted' :
-    (String(username) === p.u2) ? 'bAccepted' : null;
+    (String(userId) === p.u1) ? 'aAccepted' :
+    (String(userId) === p.u2) ? 'bAccepted' : null;
   if (!field) return { error: 'Not part of this pair' };
 
   await redis.hset(pK, field, 1);
@@ -295,19 +322,19 @@ export async function acceptMatch(username, pairId) {
 }
 
 /**
- * declineMatch(username, pairId):
+ * declineMatch(userId, pairId):
  * - If one declines, we requeue the other user (the one who did NOT decline) using their stored criteria.
  * - The decliner becomes status=NONE (no active request).
  * - Pair record is cleaned up.
  */
-export async function declineMatch(username, pairId) {
+export async function declineMatch(userId, pairId) {
   const pK = pairKey(pairId);
   const p = await redis.hgetall(pK);
   if (!p || !p.u1) return { error: 'Pair not found' };
 
-  const other = (String(username) === p.u1)
+  const other = (String(userId) === p.u1)
     ? p.u2
-    : (String(username) === p.u2) ? p.u1 : null;
+    : (String(userId) === p.u2) ? p.u1 : null;
 
   if (!other) return { error: 'Not part of this pair' };
 
@@ -315,8 +342,8 @@ export async function declineMatch(username, pairId) {
   await requeueFromStoredCriteria(other);
 
   // Decliner becomes inactive
-  await redis.hset(reqKey(username), { status: 'NONE' });
-  await redis.srem(ACTIVE_USERS, String(username));
+  await redis.hset(reqKey(userId), { status: 'NONE' });
+  await redis.srem(ACTIVE_USERS, String(userId));
 
   // Cleanup the pair record
   await redis.srem(ACTIVE_PAIRS, pairId);
@@ -325,55 +352,17 @@ export async function declineMatch(username, pairId) {
   return { ok: true };
 }
 
-/**
- * retryRequest(username, mode):
- * - mode === 'same': re-enqueue with the same criteria.
- * - mode === 'broaden': relax topics (siblings) and possibly widen difficulty by ±1.
- */
-export async function retryRequest(username, mode = 'same') {
-  const r = await redis.hgetall(reqKey(username));
-  if (!r || !r.status) return { error: 'No request' };
-
-  // Clear any lingering entries from buckets first
-  await cleanupUserFromBuckets(username);
-
-  const { difficulty, topics } = await getStoredCriteria(username);
-  const seniorityTs = Number(r.seniorityTs) || Date.now();
-
-  if (mode === 'same') {
-    const keys = await enqueueByCriteria(username, { difficulty, topics }, seniorityTs);
-    await tryMatch(username, keys);
-    return { ok: true, mode: 'same' };
-  }
-
-  // Broaden: add sibling topics (capped) and maybe shift difficulty by one neighbor
-  const broadenedTopics = relaxTopics(topics, 3);
-  let newDifficulty = difficulty;
-  if (!difficulty || Math.random() < 0.5) {
-    newDifficulty = relaxDifficulty(difficulty) || difficulty;
-  }
-
-  const keys = await enqueueByCriteria(
-    username,
-    { difficulty: newDifficulty, topics: broadenedTopics },
-    seniorityTs
-  );
-  await tryMatch(username, keys);
-
-  return { ok: true, mode: 'broaden', applied: { difficulty: newDifficulty || '(all)', topics: broadenedTopics } };
-}
-
-/** getStatus(username): returns the current request hash or { status: 'NONE' } if nothing active. */
-export async function getStatus(username) {
-  const r = await redis.hgetall(reqKey(username));
+/** getStatus(userId): returns the current request hash or { status: 'NONE' } if nothing active. */
+export async function getStatus(userId) {
+  const r = await redis.hgetall(reqKey(userId));
   return (r && Object.keys(r).length) ? r : { status: 'NONE' };
 }
 
-/** cancelMyRequest(username): remove user from all buckets and clear their request state. */
-export async function cancelMyRequest(username) {
-  await cleanupUserFromBuckets(username);
-  await redis.del(reqKey(username));
-  await redis.srem(ACTIVE_USERS, String(username));
+/** cancelMyRequest(userId): remove user from all buckets and clear their request state. */
+export async function cancelMyRequest(userId) {
+  await cleanupUserFromBuckets(userId);
+  await redis.del(reqKey(userId));
+  await redis.srem(ACTIVE_USERS, String(userId));
 }
 
 
@@ -383,8 +372,8 @@ export async function getPair(pairId) {
   return await redis.hgetall(pairKey(pairId));
 }
 
-export async function getPairForUser(username) {
-  const r = await redis.hgetall(reqKey(username));
+export async function getPairForUser(userId) {
+  const r = await redis.hgetall(reqKey(userId));
   if (!r?.pairId) return null;
   const p = await redis.hgetall(pairKey(r.pairId));
   return p && Object.keys(p).length ? { pairId: r.pairId, ...p } : null;

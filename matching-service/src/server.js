@@ -1,12 +1,14 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import jwt from 'jsonwebtoken';
+import routes from './routes/index.js';
 
 import {
   createRequest, acceptMatch, declineMatch,
   retryRequest, getStatus, cancelMyRequest, startSweeper
-} from './matchManager.js';
+} from './services/matchManager.js';
+import { authMiddleware } from './middleware/auth.js';
 
 dotenv.config();
 
@@ -14,65 +16,46 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const JWT_SECRET = process.env.JWT_SECRET || 'devsecret';
-
-// Simple auth middleware: reads Bearer JWT; sets req.user = { username, ... }
-function auth(req, res, next) {
-  const hdr = req.headers.authorization || '';
-  const m = hdr.match(/^Bearer\s+(.+)$/i);
-  if (!m) return res.status(401).json({ error: 'Missing token' });
-  try {
-    const payload = jwt.verify(m[1], JWT_SECRET);
-    // expect payload to have username (or sub); adjust to your auth service
-    const username = payload.username || payload.sub;
-    if (!username) return res.status(401).json({ error: 'Token missing username/sub' });
-    req.user = { username, token: m[1], payload };
-    next();
-  } catch (e) {
-    return res.status(401).json({ error: 'Invalid token' });
-  }
-}
-
 // Health
 app.get('/health', (_, res) => res.json({ ok: true, service: 'matching' }));
 
-// Create matching request
-app.post('/match/requests', auth, async (req, res) => {
+// Mount the secured router at /match (routes.js already applies authMiddleware)
+app.use('/match', routes);
+
+// All /match routes require auth
+app.post('/match/requests', authMiddleware, async (req, res) => {
   const { difficulty, topics = [] } = req.body || {};
-  const out = await createRequest(req.user.username, { difficulty, topics });
+  const out = await createRequest(req.user.id, { difficulty, topics });
   res.json(out);
 });
 
-// Accept / Decline
-app.post('/match/accept', auth, async (req, res) => {
+app.post('/match/accept', authMiddleware, async (req, res) => {
   const { pairId } = req.body || {};
   if (!pairId) return res.status(400).json({ error: 'pairId required' });
-  const out = await acceptMatch(req.user.username, pairId);
+  const out = await acceptMatch(req.user.id, pairId);
   res.json(out);
 });
 
-app.post('/match/decline', auth, async (req, res) => {
+app.post('/match/decline', authMiddleware, async (req, res) => {
   const { pairId } = req.body || {};
   if (!pairId) return res.status(400).json({ error: 'pairId required' });
-  const out = await declineMatch(req.user.username, pairId);
+  const out = await declineMatch(req.user.id, pairId);
   res.json(out);
 });
 
-// Retry (same|broaden)
-app.post('/match/retry', auth, async (req, res) => {
+app.post('/match/retry', authMiddleware, async (req, res) => {
   const { mode = 'same' } = req.body || {};
-  const out = await retryRequest(req.user.username, mode);
+  const out = await retryRequest(req.user.id, mode);
   res.json(out);
 });
 
-// Status / Cancel
-app.get('/match/status', auth, async (req, res) => {
-  const out = await getStatus(req.user.username);
+app.get('/match/status', authMiddleware, async (req, res) => {
+  const out = await getStatus(req.user.id);
   res.json(out);
 });
 
-app.post('/match/cancel', auth, async (req, res) => {
-  await cancelMyRequest(req.user.username);
+app.post('/match/cancel', authMiddleware, async (req, res) => {
+  await cancelMyRequest(req.user.id);
   res.json({ ok: true });
 });
 
