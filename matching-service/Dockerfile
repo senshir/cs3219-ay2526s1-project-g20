@@ -8,7 +8,6 @@ RUN npm ci --omit=dev
 
 # Copy source
 COPY src ./src
-COPY src/topicFamilies.json ./src/topicFamilies.json
 
 # Set env & port
 ENV NODE_ENV=production
@@ -18,6 +17,10 @@ EXPOSE 3001
 # (Optional) run as non-root
 RUN addgroup -S app && adduser -S app -G app
 USER app
+
+# Optional healthcheck (expects /health route)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:3001/health || exit 1
 
 # Start server
 CMD ["node", "src/server.js"]
