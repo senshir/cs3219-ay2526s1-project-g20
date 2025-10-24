@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import "../css/Matching.css";
 
 export default function Matching() {
   const [topic, setTopic] = useState("DP");
@@ -8,27 +9,32 @@ export default function Matching() {
 
   async function onStart(e) {
     e.preventDefault();
-    // UI-only for now. Replace with your service call later.
-    // Example (when backend is ready):
-    // const res = await fetch(`${import.meta.env.VITE_MATCH_URL}/match/find`, { method: 'POST', body: JSON.stringify({ topic, difficulty, mode }) });
     setMsg(`Searching for ${mode === "pair" ? "a partner" : "a session"} in ${topic} (${difficulty})…`);
-    setTimeout(() => setMsg("Demo: matched! (wire this to your backend)"), 1000);
+    setTimeout(() => setMsg("✅ Demo: matched! (wire this to your backend)"), 1000);
   }
 
   return (
-    <div>
+    <div className="matching">
       <h1 className="h1">Start Matching</h1>
       <p className="p-muted">Choose your preferences and begin pairing.</p>
 
-      <div className="card" style={{ maxWidth: 680 }}>
-        <form className="list" style={{ gap: 14 }} onSubmit={onStart}>
+      <div className="card match-card">
+        <form className="list" onSubmit={onStart}>
           <div>
             <label className="label">Mode</label>
             <div className="segmented">
-              <button type="button" className={mode === "pair" ? "is-active" : ""} onClick={() => setMode("pair")}>
+              <button
+                type="button"
+                className={mode === "pair" ? "is-active" : ""}
+                onClick={() => setMode("pair")}
+              >
                 Pair Match
               </button>
-              <button type="button" className={mode === "solo" ? "is-active" : ""} onClick={() => setMode("solo")}>
+              <button
+                type="button"
+                className={mode === "solo" ? "is-active" : ""}
+                onClick={() => setMode("solo")}
+              >
                 Solo Practice
               </button>
             </div>
@@ -54,11 +60,15 @@ export default function Matching() {
             </select>
           </div>
 
-          {msg && <div className="p-muted">{msg}</div>}
+          {msg && <div className="p-muted msg-box">{msg}</div>}
 
-          <div className="row" style={{ gap: 10 }}>
-            <button className="btn btn--dark btn--xl" type="submit">⚡ Start Matching</button>
-            <button className="btn" type="button" onClick={() => { setMsg(""); }}>Clear</button>
+          <div className="row btn-row">
+            <button className="btn btn--dark btn--xl" type="submit">
+              ⚡ Start Matching
+            </button>
+            <button className="btn" type="button" onClick={() => setMsg("")}>
+              Clear
+            </button>
           </div>
         </form>
       </div>

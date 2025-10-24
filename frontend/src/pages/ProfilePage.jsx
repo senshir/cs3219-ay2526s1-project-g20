@@ -1,9 +1,10 @@
 import React from "react";
+import "../css/ProfilePage.css";
 
 function Stat({ icon, label, value }) {
   return (
-    <div className="stat" style={{ minWidth: 90 }}>
-      <div className="v" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+    <div className="stat">
+      <div className="v">
         {icon} {value}
       </div>
       <div className="l">{label}</div>
@@ -13,11 +14,16 @@ function Stat({ icon, label, value }) {
 
 function Row({ title, subtitle, status }) {
   const cls =
-    "badge--pill " + (status === "Completed" ? "badge--dark" : status === "Incomplete" ? "badge--soft" : "badge");
+    "badge--pill " +
+    (status === "Completed"
+      ? "badge--dark"
+      : status === "Incomplete"
+      ? "badge--soft"
+      : "badge");
   return (
     <div className="item">
       <div>
-        <div style={{ fontWeight: 600, fontSize: 14 }}>{title}</div>
+        <div className="item-title">{title}</div>
         <div className="meta">{subtitle}</div>
       </div>
       <span className={cls}>{status}</span>
@@ -26,66 +32,103 @@ function Row({ title, subtitle, status }) {
 }
 
 export default function ProfilePage({ user }) {
-  const initials = (user?.name || "AC").split(" ").map(s => s[0]).join("").slice(0,2).toUpperCase();
+  const initials = (user?.name || "AC")
+    .split(" ")
+    .map((s) => s[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
-    <div>
+    <div className="profile-page">
       <h1 className="h1">PeerPrep User Profile</h1>
-      <p className="kicker">Comprehensive user dashboard showing coding statistics, match history, achievements, and skill progression</p>
+      <p className="kicker">
+        Comprehensive user dashboard showing coding statistics, match history,
+        achievements, and skill progression
+      </p>
 
-      <section className="card">
-        <div style={{ display: "flex", gap: 16, alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-            <div className="avatar-lg">{initials}<span className="dot" /></div>
+      <section className="card profile-header-card">
+        <div className="profile-header">
+          <div className="profile-left">
+            <div className="avatar-lg">
+              {initials}
+              <span className="dot" />
+            </div>
             <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <h2 style={{ margin: 0 }}>{user?.name || "Alex Chen"}</h2>
-                <span className="badge badge--pill badge--soft">Active Member</span>
+              <div className="user-info">
+                <h2>{user?.username || "Alex Chen"}</h2>
+                <span className="badge badge--pill badge--soft">
+                  Active Member
+                </span>
               </div>
-              <div className="kicker">{user?.email || "alex.chen@example.com"}</div>
-              <div style={{ display: "flex", gap: 24, marginTop: 10 }}>
+              <div className="kicker">
+                {user?.email || "alex.chen@example.com"}
+              </div>
+              <div className="stats-row">
                 <Stat value="47" label="Total Sessions" icon={"👥"} />
                 <Stat value="23" label="Problems Solved" icon={"✅"} />
                 <Stat value="142h" label="Total Hours" icon={"⏱️"} />
                 <Stat value="7" label="Day Streak" icon={"📈"} />
               </div>
-              <div className="tags" style={{ marginTop: 10 }}>
+              <div className="tags">
                 <span className="tag">JavaScript</span>
-                <span className="tag" style={{ background: "#e0f2fe", color: "#0369a1" }}>Python</span>
-                <span className="tag" style={{ background: "#fee2e2", color: "#b91c1c" }}>Java</span>
-                <span className="tag" style={{ background: "#ede9fe", color: "#6d28d9" }}>C++</span>
+                <span className="tag tag-blue">Python</span>
+                <span className="tag tag-red">Java</span>
+                <span className="tag tag-purple">C++</span>
               </div>
             </div>
           </div>
-          <button className="btn" onClick={(e)=>e.preventDefault()}>Edit Profile</button>
+          <button className="btn">Edit Profile</button>
         </div>
 
-        <div style={{ marginTop: 16 }}>
-          <div className="segmented">
-            <button className="is-active">Overview</button>
-            <button>Match History</button>
-            <button>Achievements</button>
-            <button>Skills</button>
-          </div>
+        <div className="segmented">
+          <button className="is-active">Overview</button>
+          <button>Match History</button>
+          <button>Achievements</button>
+          <button>Skills</button>
         </div>
       </section>
 
-      <section className="grid-row" style={{ marginTop: 16 }}>
+      <section className="grid-row">
         <div className="card">
           <h3>Performance Stats</h3>
-          <div className="p-muted" style={{ marginBottom: 6 }}>Success Rate <span style={{ float: "right" }}>78%</span></div>
-          <div className="bar" style={{ marginBottom: 12 }}><div style={{ width: "78%" }} /></div>
-          <div className="p-muted" style={{ marginBottom: 6 }}>Avg. Session Time <span style={{ float: "right" }}>45m</span></div>
-          <div className="bar" style={{ marginBottom: 12 }}><div style={{ width: "45%" }} /></div>
-          <div className="p-muted">Member since <span style={{ float: "right" }}>March 2024</span></div>
+          <div className="p-muted">
+            Success Rate <span className="right">78%</span>
+          </div>
+          <div className="bar">
+            <div style={{ width: "78%" }} />
+          </div>
+
+          <div className="p-muted">
+            Avg. Session Time <span className="right">45m</span>
+          </div>
+          <div className="bar">
+            <div style={{ width: "45%" }} />
+          </div>
+
+          <div className="p-muted">
+            Member since <span className="right">March 2024</span>
+          </div>
         </div>
 
         <div className="card">
           <h3>Recent Activity</h3>
           <div className="list">
-            <Row title="Two Sum" subtitle="with Sarah Kim • 32min • 2024-03-15" status="Completed" />
-            <Row title="Binary Tree Traversal" subtitle="with Mike Johnson • 58min • 2024-03-14" status="Completed" />
-            <Row title="Longest Palindrome" subtitle="with Emma Wilson • 67min • 2024-03-13" status="Incomplete" />
+            <Row
+              title="Two Sum"
+              subtitle="with Sarah Kim • 32min • 2024-03-15"
+              status="Completed"
+            />
+            <Row
+              title="Binary Tree Traversal"
+              subtitle="with Mike Johnson • 58min • 2024-03-14"
+              status="Completed"
+            />
+            <Row
+              title="Longest Palindrome"
+              subtitle="with Emma Wilson • 67min • 2024-03-13"
+              status="Incomplete"
+            />
           </div>
         </div>
       </section>
