@@ -1,26 +1,40 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import "../css/Problems.css";
+import { getAllQuestions } from "../api/questionService";
 
-const DATA = [
-  { id: 1, title: "Two Sum", topic: "Arrays", diff: "Easy", status: "Solved", blurb: "Find two numbers that add to target." },
-  { id: 2, title: "Binary Tree Level Order", topic: "Graphs", diff: "Medium", status: "Practice", blurb: "BFS traversal of a tree." },
-  { id: 3, title: "Longest Palindrome Substring", topic: "Strings", diff: "Medium", status: "Practice", blurb: "Center expansion or DP." },
-  { id: 4, title: "Edit Distance", topic: "DP", diff: "Hard", status: "Not Solved", blurb: "Classic dynamic programming." },
-];
 
 export default function Problems() {
+  const [problems, setProblems] = useState([]);
   const [kw, setKw] = useState("");
   const [topic, setTopic] = useState("");
   const [diff, setDiff] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
 
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await getAllQuestions();
+        setProblems(data);
+      } catch (err) {
+        setError(err.message || "Failed to load problems");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+  
   const rows = useMemo(() => {
-    return DATA.filter(r => {
+    return problems.filter(r => {
       const okKw = !kw || r.title.toLowerCase().includes(kw.toLowerCase());
       const okT = !topic || r.topic === topic;
-      const okD = !diff || r.diff === diff;
+      const okD = !diff || r.difficulty === diff;
       return okKw && okT && okD;
     });
-  }, [kw, topic, diff]);
+  }, [problems, kw, topic, diff]);
+
+  if (loading) return <p>Loading problems...</p>;
+  if (error) return <p className="error-msg">{error}</p>;
 
   return (
     <div className="problems-page">

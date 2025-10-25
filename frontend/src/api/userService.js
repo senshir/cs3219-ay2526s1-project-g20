@@ -3,7 +3,7 @@ const API_BASE = import.meta.env.VITE_USER_SERVICE_URL || "http://localhost:8000
 async function handleResponse(res) {
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-        console.error("Server error details:", err); // Log the full error
+    console.error("Server error details:", err); // Log the full error
     throw new Error(err.detail || res.statusText || "Unknown error");
   }
   return res.json();
@@ -15,7 +15,17 @@ export async function registerUser({ username, email, password }) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username, email, password })
   });
-  return await res.json();
+  
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    console.error("Registration failed:", err);
+    throw new Error(err.detail || err.message || "Registration failed");
+  }
+  const userData = await res.json();
+
+  const loginData = await loginUser(email, password);
+  localStorage.setItem("token", loginData.access_token);
+  return { user: userData, token: loginData.access_token };
 }
 
 export async function loginUser(username, password) {

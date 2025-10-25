@@ -30,13 +30,6 @@ export default function Matching() {
               >
                 Pair Match
               </button>
-              <button
-                type="button"
-                className={mode === "solo" ? "is-active" : ""}
-                onClick={() => setMode("solo")}
-              >
-                Solo Practice
-              </button>
             </div>
           </div>
 

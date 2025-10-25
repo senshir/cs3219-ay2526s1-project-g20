@@ -29,8 +29,8 @@ export function AuthProvider({ children }) {
   };
 
   const register = async (data) => {
-    await registerUser(data);
-    await login(data.email, data.password); // auto-login
+    const { user } = await registerUser(data);
+    setUser(user);
   };
 
   const logout = () => {
