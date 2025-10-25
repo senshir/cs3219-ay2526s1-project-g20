@@ -1,5 +1,6 @@
-import React from "react";
+import { useContext } from "react";
 import { useNavigate } from "react-router-dom";
+import { AuthContext } from "../context/AuthContext";
 import "../css/Dashboard.css";
 
 function Badge({ children, tone }) {
@@ -21,19 +22,19 @@ function Stat({ label, value }) {
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { user } = useContext(AuthContext);
+
+  const username = user?.username || "User";
 
   return (
     <div className="dashboard">
       <section className="welcome-section">
-        <h1 className="h1">Welcome back, John!</h1>
-        <p className="p-muted">Ready to continue your coding interview preparation?</p>
+        <h1 className="h1">Welcome back, {username}!</h1>
+        <p className="p-muted">Ready to start preparing?</p>
         <div className="row button-row">
-          <button className="btn btn--dark">&lt;/&gt;&nbsp; Practice Problems</button>
           <button className="btn btn--dark btn--xl" onClick={() => navigate("/matching")}>
             ⚡ Start Matching
           </button>
-          <button className="btn">📅&nbsp; Schedule Interview</button>
-          <button className="btn">📚&nbsp; Study Resources</button>
         </div>
       </section>
 

@@ -159,68 +159,6 @@
 }
 
 /***************************************************
- * PROGRESS BARS
- ***************************************************/
-.bar {
-  background: #eee;
-  height: 6px;
-  border-radius: 4px;
-  overflow: hidden;
-  margin-bottom: 10px;
-}
-
-.bar div {
-  background: #333;
-  height: 100%;
-}
-
-/***************************************************
- * BADGES
- ***************************************************/
-.badge {
-  background: #f3f4f6;
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-size: 0.8rem;
-  color: #333;
-}
-
-.badge--pill {
-  border-radius: 9999px;
-}
-
-.badge--soft {
-  background: #e0e7ff;
-  color: #3730a3;
-}
-
-.badge--dark {
-  background: #333;
-  color: white;
-}
-
-/***************************************************
- * LIST ITEMS
- ***************************************************/
-.item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 0;
-  border-bottom: 1px solid #eee;
-}
-
-.item-title {
-  font-weight: 600;
-  font-size: 14px;
-}
-
-.meta {
-  font-size: 0.85rem;
-  color: #777;
-}
-
-/***************************************************
  * BUTTONS
  ***************************************************/
 .btn {
@@ -355,3 +293,4 @@
     width: 100%;
   }
 }
+
