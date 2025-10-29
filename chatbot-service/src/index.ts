@@ -5,17 +5,16 @@ import dotenv from "dotenv";
 import compression from "compression";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
-import { connectDatabase, checkDatabaseHealth } from "./config/database";
-import questionRoutes from "./routes/questionRoutes";
+import chatbotRoutes from "./routes/chatbotRoutes";
 import { errorHandler } from "./middleware/errorHandler";
 import { performanceMiddleware } from "./middleware/performance";
-import mongoose from "mongoose";
+import chatbotService from "./services/chatbotService";
 
 // Load environment variables
 dotenv.config();
 
 const app: Application = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3002;
 
 // Security middleware
 app.use(helmet());
@@ -37,9 +36,11 @@ app.use(
     origin: [
       "http://localhost:3000",
       "http://localhost:3001",
+      "http://localhost:3002",
       "http://localhost:8080",
       "http://127.0.0.1:3000",
       "http://127.0.0.1:3001",
+      "http://127.0.0.1:3002",
       "http://127.0.0.1:8080",
       "file://",
       "null",
@@ -61,26 +62,20 @@ app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 app.use(performanceMiddleware);
 
 // Health check endpoint
-app.get("/health", async (req, res) => {
+app.get("/health", (req, res) => {
   try {
-    const dbHealthy = await checkDatabaseHealth();
-    let questionCount = 0;
-    if (dbHealthy && mongoose.connection.db) {
-      questionCount = await mongoose.connection.db
-        .collection("questions")
-        .countDocuments()
-        .catch(() => 0);
-    }
-
+    const conversationsCount = chatbotService.getAllConversations().length;
     res.status(200).json({
       success: true,
-      message: "Question service is running",
+      message: "Chatbot service is running",
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       memory: process.memoryUsage(),
-      database: {
-        status: dbHealthy ? "connected" : "disconnected",
-        questionCount: questionCount,
+      statistics: {
+        activeConversations: conversationsCount,
+        openaiConfigured:
+          !!process.env.OPENAI_API_KEY &&
+          process.env.OPENAI_API_KEY !== "your_openai_api_key_here",
       },
       version: "1.0.0",
     });
@@ -108,7 +103,7 @@ app.get("/metrics", (req, res) => {
 });
 
 // API routes
-app.use("/api/questions", questionRoutes);
+app.use("/api/chatbot", chatbotRoutes);
 
 // Error handling middleware
 app.use(errorHandler);
@@ -124,15 +119,12 @@ app.use((req, res) => {
 // Start server
 const startServer = async () => {
   try {
-    // Connect to database
-    await connectDatabase();
-
     // Start listening
     app.listen(PORT, () => {
-      console.log(`Question service is running on port ${PORT}`);
-      console.log(`API endpoint: http://localhost:${PORT}/api/questions`);
+      console.log(`Chatbot service is running on port ${PORT}`);
+      console.log(`Environment: ${process.env.NODE_ENV || "development"}`);
       console.log(`Health check: http://localhost:${PORT}/health`);
-      console.log(`Metrics: http://localhost:${PORT}/metrics`);
+      console.log(`API endpoints: http://localhost:${PORT}/api/chatbot`);
     });
   } catch (error) {
     console.error("Failed to start server:", error);
@@ -141,5 +133,3 @@ const startServer = async () => {
 };
 
 startServer();
-
-export default app;
