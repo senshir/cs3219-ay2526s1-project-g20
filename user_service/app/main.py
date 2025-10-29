@@ -1,9 +1,23 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.router import api_router
+from app.db.database import create_indexes, client
 
 # Create FastAPI application
 app = FastAPI(title="M1 User Service", description="User management service for PeerPrep")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # --- Startup logic ---
+    await create_indexes()
+    print("✅ MongoDB indexes created successfully")
+
+    yield  # ⬅️ This marks the point where the app starts serving requests
+
+    # --- Shutdown logic ---
+    client.close()
+    print("🛑 MongoDB connection closed")
 
 # Include API routes
 app.include_router(api_router)
@@ -27,7 +41,3 @@ app.add_middleware(
 async def root():
     return {"message": "Welcome to User Service API"}
     
-
-
-
-

@@ -5,7 +5,7 @@ import Dashboard from "./pages/Dashboard.jsx";
 import Problems from "./pages/Problems.jsx";
 import ProfilePage from "./pages/ProfilePage.jsx";
 import Matching from "./pages/Matching.jsx";
-import Modal from "./components/Modal.jsx";
+import Modal from "./components/ProfilePopUpModal.jsx";
 import LoginModal from "./pages/LoginModal.jsx";
 import ProfileModal from "./pages/ProfileModal.jsx";
 
