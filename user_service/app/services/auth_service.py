@@ -11,15 +11,15 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 class AuthService:
     @staticmethod
-    def authenticate_user(username_or_email: str, password: str) -> dict:
+    async def authenticate_user(username_or_email: str, password: str) -> dict:
         """Authenticate a user by username/email and password"""
-        user = UserService.get_user_by_credentials(username_or_email)
+        user = await UserService.get_user_by_credentials(username_or_email)
         
         # Check if user exists and password is correct
         if not user or not verify_password(password, user["password"]):
             # Increment failed login attempts if user exists
             if user:
-                UserService.increment_failed_login(user["_id"])
+                await UserService.increment_failed_login(user["_id"])
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect email/username or password",
@@ -61,7 +61,7 @@ class AuthService:
         if user_id is None:
             raise credentials_exception
             
-        user = UserService.get_user_by_id(user_id)
+        user = await UserService.get_user_by_id(user_id)
         if user is None:
             raise credentials_exception
             

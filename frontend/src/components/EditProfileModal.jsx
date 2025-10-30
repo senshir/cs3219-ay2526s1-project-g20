@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import "../css/EditProfileModal.css";
+import { updatePassword, updateUsername } from "../api/userService";
+import Modal from "./ProfilePopUpModal.jsx";
 
 export default function EditProfileModal({ user, onClose, onSave }) {
   const [username, setUsername] = useState(user.username || "");
@@ -15,29 +17,13 @@ export default function EditProfileModal({ user, onClose, onSave }) {
     try {
       // Update username if changed
       if (username !== user.username) {
-        const res = await fetch("http://localhost:8000/username", {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${user.access_token}`, // assuming token stored in user
-          },
-          body: JSON.stringify({ new_username: username }),
-        });
-        if (!res.ok) throw new Error("Failed to update username");
+        await updateUsername(username);
       }
 
       // Update password if provided
       if (password) {
         if (password !== confirm) throw new Error("Passwords do not match");
-        const res = await fetch("http://localhost:8000/password", {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${user.access_token}`,
-          },
-          body: JSON.stringify({ new_password: password }),
-        });
-        if (!res.ok) throw new Error("Failed to update password");
+        updatePassword(user.password, password);
       }
 
       setMessage("✅ Profile updated successfully!");
@@ -50,22 +36,26 @@ export default function EditProfileModal({ user, onClose, onSave }) {
   };
 
   return (
-    <div className="modal-overlay">
-      <div className="modal">
-        <h2>Edit Profile</h2>
+    <Modal title="Edit Profile" onClose={onClose} width={480}>
+      <div className="space-y-4">
+        {/* Username field */}
         <div className="form-group">
-          <label>Username</label>
+          <label className="block text-sm font-medium mb-1">Username</label>
           <input
+            type="text"
+            className="input"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             disabled={loading}
           />
         </div>
 
+        {/* Password fields */}
         <div className="form-group">
-          <label>New Password</label>
+          <label className="block text-sm font-medium mb-1">New Password</label>
           <input
             type="password"
+            className="input"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             disabled={loading}
@@ -73,26 +63,45 @@ export default function EditProfileModal({ user, onClose, onSave }) {
         </div>
 
         <div className="form-group">
-          <label>Confirm Password</label>
+          <label className="block text-sm font-medium mb-1">Confirm Password</label>
           <input
             type="password"
+            className="input"
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
             disabled={loading}
           />
         </div>
 
-        {message && <p className="message">{message}</p>}
+        {/* Message */}
+        {message && (
+          <p
+            className={`text-sm ${
+              message.includes("success") ? "text-green-600" : "text-red-600"
+            }`}
+          >
+            {message}
+          </p>
+        )}
 
-        <div className="modal-actions">
-          <button className="btn btn-secondary" onClick={onClose} disabled={loading}>
+        {/* Actions */}
+        <div className="flex justify-end space-x-2 pt-4">
+          <button
+            className="btn btn-secondary"
+            onClick={onClose}
+            disabled={loading}
+          >
             Cancel
           </button>
-          <button className="btn btn-primary" onClick={handleSave} disabled={loading}>
+          <button
+            className="btn btn-primary"
+            onClick={handleSave}
+            disabled={loading}
+          >
             {loading ? "Saving..." : "Save"}
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
