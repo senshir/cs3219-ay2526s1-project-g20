@@ -139,9 +139,27 @@ class ChatbotService {
       // Replace this with actual OpenAI API call when you have API key
       if (!this.apiKey || this.apiKey === "") {
         console.warn("OpenAI API key not set. Using mock response.");
+        
+        // Get context from the last user message
+        const userMessages = messages.filter(m => m.role === 'user');
+        const lastUserMessage = userMessages[userMessages.length - 1]?.content || '';
+        const systemMessage = messages.find(m => m.role === 'system')?.content || '';
+        
+        // Generate a context-aware mock response
+        let mockResponse = "";
+        
+        if (systemMessage.includes('coding') || systemMessage.includes('context')) {
+          mockResponse = this.getMockCodingResponse(lastUserMessage);
+        } else if (systemMessage.includes('hint')) {
+          mockResponse = this.getMockHintResponse(lastUserMessage);
+        } else if (systemMessage.includes('explain')) {
+          mockResponse = this.getMockExplanationResponse(lastUserMessage);
+        } else {
+          mockResponse = this.getMockGeneralResponse(lastUserMessage);
+        }
+        
         return {
-          response:
-            "Hello! I'm an AI chatbot assistant. To enable full functionality, please configure your OpenAI API key.",
+          response: mockResponse,
           usage: {
             promptTokens: 0,
             completionTokens: 0,
@@ -181,6 +199,46 @@ class ChatbotService {
 
   clearAllConversations(): void {
     this.conversations.clear();
+  }
+
+  private getMockCodingResponse(message: string): string {
+    const lowerMessage = message.toLowerCase();
+    
+    if (lowerMessage.includes('help') || lowerMessage.includes('stuck')) {
+      return "I see you need help with your code! To help you better, could you:\n1. Describe what you're trying to achieve?\n2. What specific error or issue are you encountering?\n3. Share the relevant code snippet if possible?\n\nTip: Breaking down the problem into smaller steps often makes it easier to solve!";
+    }
+    
+    if (lowerMessage.includes('time complexity') || lowerMessage.includes('space complexity')) {
+      return "Great question! Here's a quick overview:\n\n**Time Complexity**: Measures how long an algorithm takes to run. Common notations:\n- O(1): Constant time\n- O(log n): Logarithmic\n- O(n): Linear\n- O(n²): Quadratic\n\n**Space Complexity**: Measures memory usage by an algorithm.\n\nFor your current problem, think about the operations you're performing - is there a way to optimize them?";
+    }
+    
+    if (lowerMessage.includes('debug') || lowerMessage.includes('error')) {
+      return "Let's debug step by step:\n\n1. **Check your input/output**: Are you handling edge cases?\n2. **Trace through your logic**: Walk through your code mentally with sample inputs\n3. **Add print statements**: Log intermediate values to see where things go wrong\n4. **Review your data structures**: Are you using the right ones for your use case?\n\nShare more details about the specific error and I can help further!";
+    }
+    
+    if (lowerMessage.includes('approach') || lowerMessage.includes('how to')) {
+      return "Here's a systematic approach to solve coding problems:\n\n1. **Understand the problem**: Read carefully, note constraints\n2. **Identify the data structures**: What fits your needs?\n3. **Plan your algorithm**: Pseudocode first!\n4. **Implement**: Code your solution\n5. **Test**: Try edge cases\n6. **Optimize**: Can you improve time/space complexity?\n\nWhat specific approach are you considering for this problem?";
+    }
+    
+    return `I'm Preppy, your AI coding assistant! I can help you with algorithms, debugging, optimization, and code explanations. 
+    
+Right now, I'm running in mock mode. To enable full AI capabilities, please configure your OpenAI API key. 
+
+In the meantime, I can still help you think through coding challenges and provide guidance based on common patterns and best practices!
+    
+How can I assist you with your coding problem today?`;
+  }
+
+  private getMockHintResponse(message: string): string {
+    return `Here's a hint to guide you:\n\n💡 **Think about the problem constraints** - what are the limits?\n💡 **Consider edge cases** - empty inputs, single elements, etc.\n💡 **Break it down** - can you solve a simpler version first?\n💡 **Pattern recognition** - does this remind you of another problem?\n\nTry to make progress with these hints, and let me know if you need more guidance!`;
+  }
+
+  private getMockExplanationResponse(message: string): string {
+    return `Let me explain that concept:\n\n**Core Concept**: \n\n**How it works**:\n\n**Example**:\n\n**Common use cases**:\n\nWould you like me to elaborate on any specific part?`;
+  }
+
+  private getMockGeneralResponse(message: string): string {
+    return "I'm Preppy, your AI assistant for PeerPrep! I'm here to help you with coding problems, provide hints, explanations, and general guidance. How can I assist you today?";
   }
 }
 

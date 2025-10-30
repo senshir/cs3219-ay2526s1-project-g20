@@ -5,6 +5,7 @@ import Dashboard from "./pages/Dashboard.jsx";
 import Problems from "./pages/Problems.jsx";
 import ProfilePage from "./pages/ProfilePage.jsx";
 import Matching from "./pages/Matching.jsx";
+import CodeEditor from "./pages/CodeEditor.jsx";
 
 import Modal from "./components/Modal.jsx";
 import LoginModal from "./pages/Login.jsx";
@@ -100,6 +101,11 @@ export default function App() {
           />
         </Routes>
       </main>
+
+      {/* Code editor renders outside container for full width */}
+      <Routes>
+        <Route path="/code/:questionId" element={<CodeEditor />} />
+      </Routes>
 
       {sheet === "profile" && (
         <Modal title="Your Profile" onClose={closeSheet} width={640}>
