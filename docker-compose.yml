@@ -1,14 +1,13 @@
 services:
   mongo:
     image: mongo:7.0
-    container_name: mongo
     ports:
       - "27017:27017"
     environment:
       - MONGO_INITDB_DATABASE=peerprep-questions 
     volumes:
       - mongo_data:/data/db
-      - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+      - ./question-service/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
     restart: unless-stopped
     networks:
       - app-network
@@ -35,7 +34,6 @@ services:
   user-service:
     build:
       context: ./user_service
-    container_name: user-service
     ports:
       - "8000:8000"
     environment:
@@ -54,15 +52,14 @@ services:
     networks:
       - app-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/').read()"]
       interval: 30s
-      timeout: 5s
-      retries: 3
+      timeout: 10s
+      retries: 5
 
   question-service:
     build:
       context: ./question-service
-    container_name: question-service
     ports:
       - "3001:3001"
     environment:
@@ -87,7 +84,6 @@ services:
   matching-service:
     build:
       context: ./matching-service
-    container_name: matching-service
     ports:
       - "8084:3001"
     environment:
@@ -115,7 +111,6 @@ services:
   frontend:
     build:
       context: ./frontend 
-    container_name: frontend
     ports:
       - "3000:3000"
     volumes:

@@ -22,10 +22,12 @@ async def lifespan(app: FastAPI):
 # Include API routes
 app.include_router(api_router)
 
-# Allow your frontend origin
+# Allow your frontend origin(s)
 origins = [
     "http://localhost:3000",
-    # you can add production frontend URLs here
+    "http://127.0.0.1:3000",
+    "http://frontend:3000",
+    # add production frontend URLs here
 ]
 
 app.add_middleware(

@@ -35,6 +35,7 @@ const redis = new Redis(process.env.REDIS_URL || 'redis://127.0.0.1:6379');
 const TTL = Number(process.env.TTL_SECS || 120);
 const SWEEP = Number(process.env.SWEEPER_INTERVAL_SECS || 5);
 const ACCEPT_WIN = Number(process.env.ACCEPT_WINDOW_SECS || 25);
+const FALLBACK_TOPICS = ["Algorithms", "Arrays", "Data Structures", "Strings", "Graphs"];
 
 // Allowable topics and difficulties
 async function getCanonicalLists(bearerToken) {
@@ -98,6 +99,7 @@ async function enqueueByCriteria(userId, { difficulty, topics }, seniorityTs, DI
     difficulty: difficulty || '',
     topics: JSON.stringify(topics || [])
   });
+  console.log(`Setting status QUEUED for user ${userId}`);
   await redis.sadd(ACTIVE_USERS, String(userId));
   return keys;
 }
@@ -280,6 +282,8 @@ export async function createRequest(userId, { difficulty, topics = [] }, bearerT
   // Fetch canonical lists from Question Service
   const { DIFFS, ALL_TOPICS } = await getCanonicalLists(bearerToken);
 
+  const validTopics = new Set([...ALL_TOPICS, ...FALLBACK_TOPICS]);
+
   const total = (difficulty ? 1 : 0) + (topics?.length || 0);
   if (total < 1 || total > 3) {
     return { error: 'Please select between 1 and 3 categories in total.' };
@@ -292,8 +296,9 @@ export async function createRequest(userId, { difficulty, topics = [] }, bearerT
       return { error: `Invalid difficulty: ${difficulty}` };
     }
   }
-
-  const invalidTopics = (topics || []).filter(t => !ALL_TOPICS.includes(t));
+  
+  // Check if any of the topics is not valid (including fallback topics)
+  const invalidTopics = (topics || []).filter(t => !validTopics.has(t));
   if (invalidTopics.length) {
     return { error: `Invalid topics: ${invalidTopics.join(', ')}` };
   }
@@ -302,6 +307,11 @@ export async function createRequest(userId, { difficulty, topics = [] }, bearerT
 
   const seniorityTs = Date.now();
   const keys = await enqueueByCriteria(userId, { difficulty, topics }, seniorityTs, DIFFS, ALL_TOPICS);
+  await redis.hset(reqKey(userId), { status: 'QUEUED',
+                                     createdAt: seniorityTs,
+                                     difficulty,
+                                     topics: JSON.stringify(topics),
+                                   });
   await tryMatch(userId, keys);
   return { ok: true };
 }
@@ -372,7 +382,11 @@ export async function declineMatch(userId, pairId) {
 /** getStatus(userId): returns the current request hash or { status: 'NONE' } if nothing active. */
 export async function getStatus(userId) {
   const r = await redis.hgetall(reqKey(userId));
-  return (r && Object.keys(r).length) ? r : { status: 'NONE' };
+  console.log(`Fetching status for user ${userId}:`, r);
+  if (!r || !Object.keys(r).length || !r.status) {
+    return { status: 'NONE' };
+  }
+  return { status: r.status };
 }
 
 /** cancelMyRequest(userId): remove user from all buckets and clear their request state. */

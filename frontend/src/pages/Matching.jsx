@@ -1,11 +1,13 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useContext, useEffect, useMemo, useState } from "react";
 import "../css/Matching.css";
 import { api } from "../lib/api";
+import { AuthContext } from "../context/AuthContext";
 
 const FALLBACK_DIFFICULTIES = ["Easy", "Medium", "Hard"];
 const FALLBACK_TOPICS = ["Algorithms", "Arrays", "Data Structures", "Strings", "Graphs"];
 
-export default function Matching({ user }) {
+export default function Matching() {
+  const { user } = useContext(AuthContext);
   const [difficultyOptions, setDifficultyOptions] = useState(FALLBACK_DIFFICULTIES);
   const [topicOptions, setTopicOptions] = useState(FALLBACK_TOPICS);
 
@@ -18,6 +20,7 @@ export default function Matching({ user }) {
   const [error, setError] = useState("");
   const [optionsError, setOptionsError] = useState("");
 
+  const [isAutoPolling, setIsAutoPolling] = useState(false);
   const [optionsLoading, setOptionsLoading] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
@@ -102,15 +105,22 @@ export default function Matching({ user }) {
       try {
         const result = await api.get("match", "/match/status", { token: ticket });
         if (cancelled) return;
-
         setStatus(result);
-        if (result.status === "SESSION_READY") {
-          setMsg("✅ Match ready! Use the collaboration token below to join the room.");
-          setIsSearching(false);
-        } else if (result.status === "QUEUED") {
-          setMsg("⌛ Still searching… hang tight!");
-        } else if (result.status) {
-          setMsg(`ℹ️ Current status: ${result.status}`);
+        if (isAutoPolling) {
+          if (result.status === "SESSION_READY") {
+            setMsg("✅ Match ready! Use the collaboration token below to join the room.");
+            setIsSearching(false);
+          } else if (result.status === "QUEUED") {
+            setMsg("⌛ Still searching… hang tight!");
+          } else {
+            setMsg(`ℹ️ Current status: ${result.status}`);
+          }
+        } else {
+          if (result.status === "QUEUED") {
+            setMsg("✅ You are in the queue!");
+          } else {
+            setMsg(`ℹ️ Current status: ${result.status}`);
+          }
         }
       } catch (err) {
         if (!cancelled) setError(err.message || "Could not retrieve status.");
@@ -123,7 +133,7 @@ export default function Matching({ user }) {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [ticket, isSearching]);
+  }, [ticket, isSearching, isAutoPolling]);
 
   const formattedElapsed = useMemo(() => {
     const minutes = Math.floor(elapsedSeconds / 60)
@@ -157,20 +167,21 @@ export default function Matching({ user }) {
     });
   }
 
-  async function createMatchTicket() {
-    if (!user?.token) throw new Error("Missing login token. Please sign in again.");
-    const response = await api.post("users", "/match-ticket", {
-      token: user.token,
-      json: preferences,
-    });
-    return response.access_token;
+  function getLoginToken() {
+    if (!user) throw new Error("Missing login token. Please sign in again.");
+    const token = localStorage.getItem("token");
+    if (!token) throw new Error("Missing login token. Please sign in again.");
+    return token;
   }
 
   async function requestMatch(matchToken) {
-    await api.post("match", "/match/requests", {
+    const res = await api.post("match", "/match/requests", {
       token: matchToken,
       json: { difficulty: preferences.difficulty, topics: preferences.topics },
     });
+    if (res?.error) {
+      throw new Error(res.error);
+    }
   }
 
   async function onStart(e) {
@@ -181,12 +192,14 @@ export default function Matching({ user }) {
     }
     setError("");
     setStatus(null);
+    setTicket(null);
 
     try {
       setIsLoading(true);
       setIsSearching(true);
       setElapsedSeconds(0);
       setRelaxedDifficulties(new Set());
+      setIsAutoPolling(true);
 
       const difficultyLabel =
         selectedDifficulty || selectedTopics.size === 0 ? selectedDifficulty ?? "any difficulty" : selectedDifficulty;
@@ -203,7 +216,7 @@ export default function Matching({ user }) {
         })…`
       );
 
-      const matchToken = await createMatchTicket();
+      const matchToken = getLoginToken();
       setTicket(matchToken);
       await requestMatch(matchToken);
       setMsg("🎯 Request submitted. We’ll notify you once another learner accepts.");
@@ -224,6 +237,7 @@ export default function Matching({ user }) {
       return;
     }
     setError("");
+    setIsAutoPolling(false);
     try {
       const result = await api.get("match", "/match/status", { token: ticket });
       setStatus(result);
@@ -252,6 +266,7 @@ export default function Matching({ user }) {
       setStatus(null);
       setTicket(null);
       setIsSearching(false);
+      setElapsedSeconds(0);
     } catch (err) {
       setError(err.message || "Failed to cancel request.");
     }
