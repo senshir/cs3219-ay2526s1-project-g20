@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   mongo:
     image: mongo:7.0
@@ -20,6 +18,19 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    logging:
+      driver: "none"
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
 
   user-service:
     build:
@@ -43,7 +54,7 @@ services:
     networks:
       - app-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health" ]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -59,7 +70,10 @@ services:
       - MONGODB_URI=mongodb://mongo:27017/peerprep-questions 
       - PORT=3001
     depends_on:
-      - user-service
+      mongo:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - app-network
@@ -69,6 +83,34 @@ services:
       timeout: 3s
       start_period: 5s
       retries: 3
+
+  matching-service:
+    build:
+      context: ./matching-service
+    container_name: matching-service
+    ports:
+      - "8084:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - USER_SVC_BASE=http://user-service:8000
+      - QUESTIONS_SVC_BASE=http://question-service:3001
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=your-secret-key-here
+      - JWT_ALG=HS256
+      - ACCEPT_WINDOW_SECS=25
+      - TTL_SECS=120
+      - SWEEPER_INTERVAL_SECS=5
+    depends_on:
+      redis:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      question-service:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - app-network
 
   frontend:
     build:
@@ -81,9 +123,18 @@ services:
       - /app/node_modules
     environment:
       - NODE_ENV=development
+      - VITE_USER_SERVICE_URL=http://localhost:8000
+      - VITE_USERS_URL=http://localhost:8000
+      - VITE_QUESTION_SERVICE_URL=http://localhost:3001
+      - VITE_PROBLEMS_URL=http://localhost:3001
+      - VITE_MATCH_URL=http://localhost:8084
     depends_on:
-      - question-service
-      - user-service
+      question-service:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      matching-service:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - app-network
