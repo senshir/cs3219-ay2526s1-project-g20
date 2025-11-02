@@ -1,3 +1,4 @@
+/* General styles */
 .matching {
   display: flex;
   flex-direction: column;
@@ -36,6 +37,59 @@
   color: white;
 }
 
+/* Pill button grid styles */
+.pill-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+  padding: 1rem 0;
+}
+
+.pill-option {
+  display: inline-block;
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 8px; /* Less rounded, rectangular shape */
+  border: 2px solid #ddd;
+  text-align: center;
+  background-color: white;
+  color: #111;
+  cursor: pointer;
+  transition: all 0.3s ease-in-out;
+  width: 100%;
+}
+
+.pill-option:hover {
+  background-color: #f4f4f4;
+}
+
+.pill-option.is-selected {
+  background-color: #4b5563; /* Darker gray for selection */
+  color: white;
+  border-color: #4b5563;
+}
+
+.pill-option.is-disabled {
+  background-color: #d1d5db; /* Darker gray when disabled */
+  color: #6b7280; /* Slightly lighter text for disabled */
+  cursor: not-allowed;
+}
+
+.pill-option.is-relaxed {
+  background-color: #e0e7ff;
+  color: #2563eb;
+  border-color: #2563eb;
+}
+
+/* Disabled/Grayed out when reaching selection limit */
+.pill-option.is-disabled {
+  background-color: #d1d5db; /* Darker gray */
+  color: #6b7280; /* Disabled text */
+  cursor: not-allowed;
+}
+
+/* Styling for other sections */
 .select {
   width: 100%;
   padding: 8px 10px;
@@ -43,12 +97,7 @@
   border-radius: 8px;
   background: white;
   font-size: 14px;
-}
-
-.btn-row {
-  display: flex;
-  gap: 10px;
-  align-items: center;
+  color: #111;
 }
 
 .msg-box {
@@ -56,4 +105,12 @@
   padding: 8px 12px;
   border-radius: 8px;
   font-style: italic;
+}
+
+.timer-display {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-mono, "SFMono-Regular", Consolas, "Liberation Mono", monospace);
+  font-weight: 600;
 }
