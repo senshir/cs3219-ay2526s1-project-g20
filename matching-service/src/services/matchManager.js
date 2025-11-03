@@ -92,15 +92,19 @@ async function enqueueByCriteria(userId, { difficulty, topics }, seniorityTs, DI
     await redis.rpush(k, String(userId));
   }
   await redis.sadd(userBucketsKey(userId), keys);
-  await redis.hset(reqKey(userId), {
-    status: 'QUEUED',
-    createdAt: Date.now(),
-    seniorityTs,
-    difficulty: difficulty || '',
-    topics: JSON.stringify(topics || [])
-  });
+  const queueTs = Date.now();
+  await redis
+    .multi()
+    .hset(reqKey(userId), {
+      status: 'QUEUED',
+      createdAt: queueTs,
+      seniorityTs,
+      difficulty: difficulty || '',
+      topics: JSON.stringify(topics || [])
+    })
+    .hdel(reqKey(userId), 'pairId', 'expiresAt', 'sessionId')
+    .exec();
   console.log(`Setting status QUEUED for user ${userId}`);
-  await redis.hdel(reqKey(userId), 'pairId'); // clear old pairId if any
   await redis.sadd(ACTIVE_USERS, String(userId));
   return keys;
 }
@@ -309,11 +313,6 @@ export async function createRequest(userId, { difficulty, topics = [] }, bearerT
 
   const seniorityTs = Date.now();
   const keys = await enqueueByCriteria(userId, { difficulty, topics }, seniorityTs, DIFFS, ALL_TOPICS);
-  await redis.hset(reqKey(userId), { status: 'QUEUED',
-                                     createdAt: seniorityTs,
-                                     difficulty,
-                                     topics: JSON.stringify(topics),
-                                   });
   await tryMatch(userId, keys);
   return { ok: true };
 }
@@ -337,13 +336,21 @@ export async function acceptMatch(userId, pairId) {
   await redis.hset(pK, field, 1);
 
   const updated = await redis.hgetall(pK);
+  const meIsU1 = String(userId) === updated.u1;
+  const otherUserId = meIsU1 ? updated.u2 : updated.u1;
+
+  await redis.hset(reqKey(userId), { lastEvent: 'YOU_ACCEPTED' });
+  if (otherUserId) {
+    await redis.hset(reqKey(otherUserId), { lastEvent: 'PARTNER_ACCEPTED' });
+  }
+
   if (updated.aAccepted === '1' && updated.bAccepted === '1') {
     // Both accepted → create collab session and finalize
     const participants = [p.u1, p.u2];
     const session = await createSession({ participants });
 
-    await redis.hset(reqKey(p.u1), { status: 'SESSION_READY', sessionId: session.sessionId });
-    await redis.hset(reqKey(p.u2), { status: 'SESSION_READY', sessionId: session.sessionId });
+    await redis.hset(reqKey(p.u1), { status: 'SESSION_READY', sessionId: session.sessionId, lastEvent: 'BOTH_ACCEPTED' });
+    await redis.hset(reqKey(p.u2), { status: 'SESSION_READY', sessionId: session.sessionId, lastEvent: 'BOTH_ACCEPTED' });
     await redis.srem(ACTIVE_PAIRS, pairId);
     await redis.del(pK);
   }
@@ -369,9 +376,10 @@ export async function declineMatch(userId, pairId) {
 
   // Requeue the other (non-decliner)
   await requeueFromStoredCriteria(other);
+  await redis.hset(reqKey(other), { lastEvent: 'PARTNER_DECLINED' });
 
   // Decliner becomes inactive
-  await redis.hset(reqKey(userId), { status: 'NONE' });
+  await redis.hset(reqKey(userId), { status: 'NONE', lastEvent: 'YOU_DECLINED' });
   await redis.srem(ACTIVE_USERS, String(userId));
 
   // Cleanup the pair record
@@ -389,7 +397,22 @@ export async function getStatus(userId) {
   const out = { status: r.status };
   if (r.pairId) out.pairId = r.pairId;
   if (r.expiresAt) out.expiresAt = Number(r.expiresAt);
-  if (r.sessionId) out.sessionId = r.sessionId;   // for SESSION_READY
+  if (r.sessionId) out.sessionId = r.sessionId;
+
+  if (r.lastEvent) {
+    out.event = r.lastEvent;
+    await redis.hdel(reqKey(userId), 'lastEvent');
+  }
+
+  if (r.status === 'PENDING_ACCEPT' && r.pairId) {
+    const pair = await redis.hgetall(pairKey(r.pairId));
+    if (pair && pair.u1 && pair.u2) {
+      const isU1 = String(userId) === pair.u1;
+      out.accepted = isU1 ? pair.aAccepted === '1' : pair.bAccepted === '1';
+      out.partnerAccepted = isU1 ? pair.bAccepted === '1' : pair.aAccepted === '1';
+    }
+  }
+
   return out;
 }
 
@@ -442,7 +465,11 @@ export function startSweeper() {
         const createdAt = Number(r.createdAt || 0);
         if (createdAt && now - createdAt >= TTL * 1000) {
           await cleanupUserFromBuckets(u);
-          await redis.hset(reqKey(u), { status: 'EXPIRED' });
+          await redis
+            .multi()
+            .hset(reqKey(u), { status: 'EXPIRED', lastEvent: 'REQUEST_TIMEOUT' })
+            .hdel(reqKey(u), 'pairId', 'expiresAt', 'sessionId')
+            .exec();
           await redis.srem(ACTIVE_USERS, u);
           // TODO: emit WS event → "Your request expired. Tap to retry."
         }
@@ -464,16 +491,28 @@ export function startSweeper() {
 
         if (aAccepted && !bAccepted) {
           await requeueFromStoredCriteria(u1);
-          await redis.hset(reqKey(u2), { status: 'NONE' });
+          await redis.hset(reqKey(u1), { lastEvent: 'PARTNER_TIMEOUT' });
+          await redis
+            .multi()
+            .hset(reqKey(u2), { status: 'NONE', lastEvent: 'YOU_TIMEOUT' })
+            .hdel(reqKey(u2), 'pairId', 'expiresAt', 'sessionId')
+            .exec();
           await redis.srem(ACTIVE_USERS, String(u2));
         } else if (!aAccepted && bAccepted) {
           await requeueFromStoredCriteria(u2);
-          await redis.hset(reqKey(u1), { status: 'NONE' });
+          await redis.hset(reqKey(u2), { lastEvent: 'PARTNER_TIMEOUT' });
+          await redis
+            .multi()
+            .hset(reqKey(u1), { status: 'NONE', lastEvent: 'YOU_TIMEOUT' })
+            .hdel(reqKey(u1), 'pairId', 'expiresAt', 'sessionId')
+            .exec();
           await redis.srem(ACTIVE_USERS, String(u1));
         } else if (!aAccepted && !bAccepted) {
           // nobody accepted → requeue both
           await requeueFromStoredCriteria(u1);
           await requeueFromStoredCriteria(u2);
+          await redis.hset(reqKey(u1), { lastEvent: 'PAIR_TIMEOUT' });
+          await redis.hset(reqKey(u2), { lastEvent: 'PAIR_TIMEOUT' });
         }
         // else both accepted: already handled by acceptMatch()
 

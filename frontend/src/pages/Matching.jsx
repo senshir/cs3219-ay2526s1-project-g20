@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import "../css/Matching.css";
 import { api } from "../lib/api";
 import { AuthContext } from "../context/AuthContext";
@@ -20,17 +20,137 @@ export default function Matching() {
   const [error, setError] = useState("");
   const [optionsError, setOptionsError] = useState("");
 
-  const [isAutoPolling, setIsAutoPolling] = useState(false);
+  const pollTimeoutRef = useRef(null);
   const [optionsLoading, setOptionsLoading] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const timerRef = useRef(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   const [ticket, setTicket] = useState(null);
   const [status, setStatus] = useState(null);
 
   const totalSelected = (selectedDifficulty ? 1 : 0) + selectedTopics.size;
+
+  const applyStatus = useCallback(
+    (nextStatus, { fromPoll = false } = {}) => {
+      if (!nextStatus) return;
+      setStatus(nextStatus);
+
+      const state = nextStatus.status;
+      const { event, accepted, partnerAccepted } = nextStatus;
+
+      // Pause timer while awaiting handshake decisions
+      setIsPaused(state === "PENDING_ACCEPT");
+
+      let handled = false;
+
+      if (event) {
+        switch (event) {
+          case "BOTH_ACCEPTED":
+            setMsg("Both users have accepted the match!");
+            setIsSearching(false);
+            setIsPaused(false);
+            handled = true;
+            break;
+          case "YOU_ACCEPTED":
+            setMsg("You have accepted the match. Waiting for the other user.");
+            handled = true;
+            break;
+          case "PARTNER_ACCEPTED":
+            setMsg("The other user has accepted the match. Please accept to begin together.");
+            handled = true;
+            break;
+          case "PARTNER_DECLINED":
+            setMsg("Other user has declined the match.");
+            setIsPaused(false);
+            setElapsedSeconds(0);
+            setIsSearching(true);
+            handled = true;
+            break;
+          case "YOU_DECLINED":
+            setMsg("You have declined the match.");
+            setIsSearching(false);
+            setIsPaused(false);
+            handled = true;
+            break;
+          case "PARTNER_TIMEOUT":
+            setMsg("Other user did not respond in time. Searching again...");
+            setIsPaused(false);
+            setElapsedSeconds(0);
+            setIsSearching(true);
+            handled = true;
+            break;
+          case "PAIR_TIMEOUT":
+            setMsg("Match timed out. Searching again...");
+            setIsPaused(false);
+            setElapsedSeconds(0);
+            setIsSearching(true);
+            handled = true;
+            break;
+          case "YOU_TIMEOUT":
+            setMsg("You did not respond in time. Please start matching again.");
+            setIsSearching(false);
+            setIsPaused(false);
+            handled = true;
+            break;
+          case "REQUEST_TIMEOUT":
+            setMsg("Your request expired. Please start matching again.");
+            setIsSearching(false);
+            setIsPaused(false);
+            handled = true;
+            break;
+          default:
+            break;
+        }
+      }
+
+      if (state === "SESSION_READY") {
+        setMsg("Both users have accepted the match!");
+        setIsSearching(false);
+        setIsPaused(false);
+        handled = true;
+      } else if (state === "PENDING_ACCEPT" && !handled) {
+        if (accepted && partnerAccepted) {
+          setMsg("Both users have accepted the match!");
+          setIsSearching(false);
+          setIsPaused(false);
+        } else if (accepted) {
+          setMsg("You have accepted the match. Waiting for the other user.");
+        } else if (partnerAccepted) {
+          setMsg("The other user has accepted the match. Please accept to continue.");
+        } else {
+          setMsg("Match found! Please accept or decline.");
+        }
+        handled = true;
+      }
+
+      if (!handled) {
+        switch (state) {
+          case "QUEUED":
+            setMsg("⌛ Still searching… hang tight!");
+            break;
+          case "EXPIRED":
+            setMsg("Your request expired. Please start matching again.");
+            setIsSearching(false);
+            setIsPaused(false);
+            break;
+          case "NONE":
+            if (!fromPoll) setMsg("");
+            setIsSearching(false);
+            setIsPaused(false);
+            break;
+          default:
+            if (state && !handled) {
+              setMsg(`ℹ️ Current status: ${state}`);
+            }
+            break;
+        }
+      }
+    },
+    []
+  );
 
   const preferences = useMemo(
     () => ({
@@ -41,26 +161,6 @@ export default function Matching() {
     [selectedDifficulty, selectedTopics, mode]
   );
 
-  useEffect(() => {
-    console.log("Status object: ", status); // Log the full status object
-    if (status && status.status === "PENDING_ACCEPT") {
-      setIsPaused(true);  // Pausing the timer when pending accept
-    } else {
-      setIsPaused(false);
-    }
-  }, [status]);
-
-  useEffect(() => {
-    console.log("Is Searching: ", isSearching);
-    console.log("Is Paused: ", isPaused);
-    if (!isSearching || isPaused) return;
-
-    const timer = setInterval(() => {
-      setElapsedSeconds((prev) => prev + 1);
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [isSearching, isPaused]);
 
   useEffect(() => {
     let cancelled = false;
@@ -111,51 +211,75 @@ export default function Matching() {
   }, []);
 
   useEffect(() => {
-    if (!isSearching) {
-      setElapsedSeconds(0);
+    if (!isSearching || isPaused) {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      if (!isSearching) {
+        setElapsedSeconds(0);
+      }
       return;
     }
-    const timer = setInterval(() => setElapsedSeconds((prev) => prev + 1), 1000);
-    return () => clearInterval(timer);
-  }, [isSearching]);
+
+    timerRef.current = setInterval(() => {
+      setElapsedSeconds((prev) => prev + 1);
+    }, 1000);
+
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [isSearching, isPaused]);
+
+  const shouldPoll = Boolean(ticket && (isSearching || status?.status === "PENDING_ACCEPT"));
 
   useEffect(() => {
-    if (!ticket || !isSearching) return;
+    if (!shouldPoll) {
+      if (pollTimeoutRef.current) {
+        clearTimeout(pollTimeoutRef.current);
+        pollTimeoutRef.current = null;
+      }
+      return;
+    }
 
     let cancelled = false;
+
     const poll = async () => {
       try {
         const result = await api.get("match", "/match/status", { token: ticket });
         if (cancelled) return;
-        setStatus(result);
-        if (isAutoPolling) {
-          if (result.status === "SESSION_READY") {
-            setMsg("✅ Match ready! Use the collaboration token below to join the room.");
-            setIsSearching(false);
-          } else if (result.status === "QUEUED") {
-            setMsg("⌛ Still searching… hang tight!");
-          } else {
-            setMsg(`ℹ️ Current status: ${result.status}`);
-          }
-        } else {
-          if (result.status === "QUEUED") {
-            setMsg("✅ You are in the queue!");
-          } else {
-            setMsg(`ℹ️ Current status: ${result.status}`);
-          }
+        if (result?.status === "PENDING_ACCEPT") {
+          setMsg("Match found! Please accept or decline.");
         }
+
+        applyStatus(result, { fromPoll: true });
+
+        let delay = 3000;
+        if (result?.status === "PENDING_ACCEPT") delay = 1000;
+        else if (result?.status === "QUEUED") delay = 2000;
+
+        pollTimeoutRef.current = setTimeout(poll, delay);
       } catch (err) {
-        if (!cancelled) setError(err.message || "Could not retrieve status.");
+        if (!cancelled) {
+          setError(err.message || "Could not retrieve status.");
+          pollTimeoutRef.current = setTimeout(poll, 4000);
+        }
       }
     };
 
-    const interval = setInterval(poll, 5000);
-    poll();
+    pollTimeoutRef.current = setTimeout(poll, 0);
+
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      if (pollTimeoutRef.current) {
+        clearTimeout(pollTimeoutRef.current);
+        pollTimeoutRef.current = null;
+      }
     };
-  }, [ticket, isSearching, isAutoPolling]);
+  }, [shouldPoll, ticket, applyStatus]);
 
   const formattedElapsed = useMemo(() => {
     const minutes = Math.floor(elapsedSeconds / 60)
@@ -219,9 +343,9 @@ export default function Matching() {
     try {
       setIsLoading(true);
       setIsSearching(true);
+      setIsPaused(false);
       setElapsedSeconds(0);
       setRelaxedDifficulties(new Set());
-      setIsAutoPolling(true);
 
       const difficultyLabel =
         selectedDifficulty || selectedTopics.size === 0 ? selectedDifficulty ?? "any difficulty" : selectedDifficulty;
@@ -239,8 +363,8 @@ export default function Matching() {
       );
 
       const matchToken = getLoginToken();
-      setTicket(matchToken);
       await requestMatch(matchToken);
+      setTicket(matchToken);
       setMsg("🎯 Request submitted. We’ll notify you once another learner accepts.");
     } catch (err) {
       setTicket(null);
@@ -259,20 +383,9 @@ export default function Matching() {
       return;
     }
     setError("");
-    setIsAutoPolling(false);
     try {
       const result = await api.get("match", "/match/status", { token: ticket });
-      setStatus(result);
-      if (result.status === "SESSION_READY") {
-        setMsg("✅ Match ready! Use the collaboration token below to join the room.");
-        setIsSearching(false);
-      } else if (result.status === "QUEUED") {
-        setMsg("⌛ Still searching… hang tight!");
-      } else if (result.status === "PENDING_ACCEPT") {
-        setMsg("⌛ Match found! Please accept the match.");
-      } else {
-        setMsg(`ℹ️ Current status: ${result.status}`);
-      }
+      applyStatus(result);
     } catch (err) {
       setError(err.message || "Could not retrieve status.");
     }
@@ -290,6 +403,7 @@ export default function Matching() {
       setStatus(null);
       setTicket(null);
       setIsSearching(false);
+      setIsPaused(false);
       setElapsedSeconds(0);
     } catch (err) {
       setError(err.message || "Failed to cancel request.");
@@ -308,9 +422,10 @@ export default function Matching() {
         token: ticket,
         json: { pairId: status.pairId },
       });
-      setMsg("✅ You have accepted the match!");
-      setStatus({ ...status, status: "SESSION_READY" });
-      setIsSearching(false);
+      if (result?.error) throw new Error(result.error);
+      setMsg("✅ You have accepted the match! Waiting for the other user.");
+      setStatus((prev) => (prev ? { ...prev, accepted: true } : { status: "PENDING_ACCEPT", accepted: true }));
+      setIsPaused(true);
     } catch (err) {
       setError(err.message || "Failed to accept match.");
     }
@@ -328,9 +443,12 @@ export default function Matching() {
         token: ticket,
         json: { pairId: status.pairId },
       });
+      if (result?.error) throw new Error(result.error);
       setMsg("🚫 You have declined the match.");
-      setStatus({ ...status, status: "NONE" });
+      setStatus(null);
+      setTicket(null);
       setIsSearching(false);
+      setIsPaused(false);
     } catch (err) {
       setError(err.message || "Failed to decline match.");
     }
@@ -368,6 +486,7 @@ export default function Matching() {
       }
 
       setIsSearching(true);
+      setIsPaused(false);
       setElapsedSeconds(0);
     } catch (err) {
       setError(err.message || "Failed to retry search.");
@@ -380,6 +499,7 @@ export default function Matching() {
     setStatus(null);
     setTicket(null);
     setIsSearching(false);
+    setIsPaused(false);
     setElapsedSeconds(0);
     setRelaxedDifficulties(new Set());
     setMode("pair");
@@ -487,10 +607,12 @@ export default function Matching() {
             </div>
           )}
           {msg && <div className="p-muted msg-box">{msg}</div>}
-          {status?.collabToken && (
+          {(status?.collabToken || status?.sessionId) && (
             <div className="msg-box">
               <strong>Collaboration Token:</strong>
-              <code style={{ display: "block", marginTop: 4, wordBreak: "break-all" }}>{status.collabToken}</code>
+              <code style={{ display: "block", marginTop: 4, wordBreak: "break-all" }}>
+                {status.collabToken ?? status.sessionId}
+              </code>
             </div>
           )}
           {showSuggestions && canRetry && (
@@ -501,7 +623,12 @@ export default function Matching() {
 
           {status?.status === "PENDING_ACCEPT" && (
             <div className="row btn-row">
-              <button className="btn btn--dark" type="button" onClick={handleAccept}>
+              <button
+                className="btn btn--dark"
+                type="button"
+                onClick={handleAccept}
+                disabled={Boolean(status?.accepted)}
+              >
                 ✅ Accept
               </button>
               <button className="btn btn--danger" type="button" onClick={handleDecline}>
