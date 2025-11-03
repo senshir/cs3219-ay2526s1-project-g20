@@ -100,6 +100,7 @@ async function enqueueByCriteria(userId, { difficulty, topics }, seniorityTs, DI
     topics: JSON.stringify(topics || [])
   });
   console.log(`Setting status QUEUED for user ${userId}`);
+  await redis.hdel(reqKey(userId), 'pairId'); // clear old pairId if any
   await redis.sadd(ACTIVE_USERS, String(userId));
   return keys;
 }
@@ -259,6 +260,7 @@ async function tryMatch(userId, myKeys) {
     const pairId = `${a}__${b}__${Date.now()}`;    // readable & unique
     const expiresAt = Date.now() + ACCEPT_WIN * 1000;
 
+    console.log(`Matched users ${a} and ${b} into pair ${pairId}`);
     await redis.hset(pairKey(pairId), { u1: a, u2: b, aAccepted: 0, bAccepted: 0, expiresAt });
     await redis.hset(reqKey(userId), { status: 'PENDING_ACCEPT', pairId, expiresAt });
     await redis.hset(reqKey(other),    { status: 'PENDING_ACCEPT', pairId, expiresAt });
@@ -296,7 +298,7 @@ export async function createRequest(userId, { difficulty, topics = [] }, bearerT
       return { error: `Invalid difficulty: ${difficulty}` };
     }
   }
-  
+
   // Check if any of the topics is not valid (including fallback topics)
   const invalidTopics = (topics || []).filter(t => !validTopics.has(t));
   if (invalidTopics.length) {
@@ -382,11 +384,13 @@ export async function declineMatch(userId, pairId) {
 /** getStatus(userId): returns the current request hash or { status: 'NONE' } if nothing active. */
 export async function getStatus(userId) {
   const r = await redis.hgetall(reqKey(userId));
-  console.log(`Fetching status for user ${userId}:`, r);
-  if (!r || !Object.keys(r).length || !r.status) {
-    return { status: 'NONE' };
-  }
-  return { status: r.status };
+  if (!r?.status) return { status: 'NONE' };
+
+  const out = { status: r.status };
+  if (r.pairId) out.pairId = r.pairId;
+  if (r.expiresAt) out.expiresAt = Number(r.expiresAt);
+  if (r.sessionId) out.sessionId = r.sessionId;   // for SESSION_READY
+  return out;
 }
 
 /** cancelMyRequest(userId): remove user from all buckets and clear their request state. */

@@ -24,6 +24,7 @@ export default function Matching() {
   const [optionsLoading, setOptionsLoading] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   const [ticket, setTicket] = useState(null);
@@ -39,6 +40,27 @@ export default function Matching() {
     }),
     [selectedDifficulty, selectedTopics, mode]
   );
+
+  useEffect(() => {
+    console.log("Status object: ", status); // Log the full status object
+    if (status && status.status === "PENDING_ACCEPT") {
+      setIsPaused(true);  // Pausing the timer when pending accept
+    } else {
+      setIsPaused(false);
+    }
+  }, [status]);
+
+  useEffect(() => {
+    console.log("Is Searching: ", isSearching);
+    console.log("Is Paused: ", isPaused);
+    if (!isSearching || isPaused) return;
+
+    const timer = setInterval(() => {
+      setElapsedSeconds((prev) => prev + 1);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [isSearching, isPaused]);
 
   useEffect(() => {
     let cancelled = false;
@@ -246,6 +268,8 @@ export default function Matching() {
         setIsSearching(false);
       } else if (result.status === "QUEUED") {
         setMsg("⌛ Still searching… hang tight!");
+      } else if (result.status === "PENDING_ACCEPT") {
+        setMsg("⌛ Match found! Please accept the match.");
       } else {
         setMsg(`ℹ️ Current status: ${result.status}`);
       }
@@ -269,6 +293,46 @@ export default function Matching() {
       setElapsedSeconds(0);
     } catch (err) {
       setError(err.message || "Failed to cancel request.");
+    }
+  }
+
+  // Handle accepting the match
+  async function handleAccept() {
+    if (!ticket || !status?.pairId) {
+      setError("No active pair to accept.");
+      return;
+    }
+    setError("");
+    try {
+      const result = await api.post("match", "/match/accept", {
+        token: ticket,
+        json: { pairId: status.pairId },
+      });
+      setMsg("✅ You have accepted the match!");
+      setStatus({ ...status, status: "SESSION_READY" });
+      setIsSearching(false);
+    } catch (err) {
+      setError(err.message || "Failed to accept match.");
+    }
+  }
+
+  // Handle declining the match
+  async function handleDecline() {
+    if (!ticket || !status?.pairId) {
+      setError("No active pair to decline.");
+      return;
+    }
+    setError("");
+    try {
+      const result = await api.post("match", "/match/decline", {
+        token: ticket,
+        json: { pairId: status.pairId },
+      });
+      setMsg("🚫 You have declined the match.");
+      setStatus({ ...status, status: "NONE" });
+      setIsSearching(false);
+    } catch (err) {
+      setError(err.message || "Failed to decline match.");
     }
   }
 
@@ -432,6 +496,17 @@ export default function Matching() {
           {showSuggestions && canRetry && (
             <div className="msg-box">
               Still waiting? Try relaxing your criteria or requeueing to stay near the front of the line.
+            </div>
+          )}
+
+          {status?.status === "PENDING_ACCEPT" && (
+            <div className="row btn-row">
+              <button className="btn btn--dark" type="button" onClick={handleAccept}>
+                ✅ Accept
+              </button>
+              <button className="btn btn--danger" type="button" onClick={handleDecline}>
+                🚫 Decline
+              </button>
             </div>
           )}
 

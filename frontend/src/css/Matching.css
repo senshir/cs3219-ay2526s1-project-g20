@@ -114,3 +114,22 @@
   font-family: var(--font-mono, "SFMono-Regular", Consolas, "Liberation Mono", monospace);
   font-weight: 600;
 }
+
+/* Accept button */
+.btn--dark {
+  background-color: #28a745;  /* Green */
+  color: white;
+  border: none;
+}
+
+.btn--danger {
+  background-color: #dc3545;  /* Red */
+  color: white;
+  border: none;
+}
+
+.row.btn-row {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+}
