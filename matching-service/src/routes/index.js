@@ -67,7 +67,8 @@ r.post('/decline', async (req, res) => {
   try {
     const { pairId } = req.body || {};
     if (!pairId) return res.status(400).json({ error: 'pairId is required' });
-    const out = await declineMatch(req.user.id, pairId);
+    const bearer = req.headers.authorization;
+    const out = await declineMatch(req.user.id, pairId, bearer);
     return res.json(out);
   } catch {
     return res.status(500).json({ error: 'Failed to decline match' });

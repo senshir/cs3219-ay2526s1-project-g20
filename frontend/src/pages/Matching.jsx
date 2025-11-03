@@ -27,6 +27,7 @@ export default function Matching() {
   const [isPaused, setIsPaused] = useState(false);
   const timerRef = useRef(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [criteriaLocked, setCriteriaLocked] = useState(false);
 
   const [ticket, setTicket] = useState(null);
   const [status, setStatus] = useState(null);
@@ -52,14 +53,17 @@ export default function Matching() {
             setMsg("Both users have accepted the match!");
             setIsSearching(false);
             setIsPaused(false);
+            setCriteriaLocked(false);
             handled = true;
             break;
           case "YOU_ACCEPTED":
             setMsg("You have accepted the match. Waiting for the other user.");
+            setCriteriaLocked(true);
             handled = true;
             break;
           case "PARTNER_ACCEPTED":
             setMsg("The other user has accepted the match. Please accept to begin together.");
+            setCriteriaLocked(true);
             handled = true;
             break;
           case "PARTNER_DECLINED":
@@ -67,12 +71,14 @@ export default function Matching() {
             setIsPaused(false);
             setElapsedSeconds(0);
             setIsSearching(true);
+            setCriteriaLocked(true);
             handled = true;
             break;
           case "YOU_DECLINED":
             setMsg("You have declined the match.");
             setIsSearching(false);
             setIsPaused(false);
+            setCriteriaLocked(false);
             handled = true;
             break;
           case "PARTNER_TIMEOUT":
@@ -80,6 +86,7 @@ export default function Matching() {
             setIsPaused(false);
             setElapsedSeconds(0);
             setIsSearching(true);
+            setCriteriaLocked(true);
             handled = true;
             break;
           case "PAIR_TIMEOUT":
@@ -87,18 +94,21 @@ export default function Matching() {
             setIsPaused(false);
             setElapsedSeconds(0);
             setIsSearching(true);
+            setCriteriaLocked(true);
             handled = true;
             break;
           case "YOU_TIMEOUT":
             setMsg("You did not respond in time. Please start matching again.");
             setIsSearching(false);
             setIsPaused(false);
+            setCriteriaLocked(false);
             handled = true;
             break;
           case "REQUEST_TIMEOUT":
             setMsg("Your request expired. Please start matching again.");
             setIsSearching(false);
             setIsPaused(false);
+            setCriteriaLocked(false);
             handled = true;
             break;
           default:
@@ -110,18 +120,23 @@ export default function Matching() {
         setMsg("Both users have accepted the match!");
         setIsSearching(false);
         setIsPaused(false);
+        setCriteriaLocked(false);
         handled = true;
       } else if (state === "PENDING_ACCEPT" && !handled) {
         if (accepted && partnerAccepted) {
           setMsg("Both users have accepted the match!");
           setIsSearching(false);
           setIsPaused(false);
+          setCriteriaLocked(false);
         } else if (accepted) {
           setMsg("You have accepted the match. Waiting for the other user.");
+          setCriteriaLocked(true);
         } else if (partnerAccepted) {
           setMsg("The other user has accepted the match. Please accept to continue.");
+          setCriteriaLocked(true);
         } else {
           setMsg("Match found! Please accept or decline.");
+          setCriteriaLocked(true);
         }
         handled = true;
       }
@@ -130,16 +145,19 @@ export default function Matching() {
         switch (state) {
           case "QUEUED":
             setMsg("⌛ Still searching… hang tight!");
+            setCriteriaLocked(true);
             break;
           case "EXPIRED":
             setMsg("Your request expired. Please start matching again.");
             setIsSearching(false);
             setIsPaused(false);
+            setCriteriaLocked(false);
             break;
           case "NONE":
             if (!fromPoll) setMsg("");
             setIsSearching(false);
             setIsPaused(false);
+            setCriteriaLocked(false);
             break;
           default:
             if (state && !handled) {
@@ -363,6 +381,7 @@ export default function Matching() {
       );
 
       const matchToken = getLoginToken();
+      setCriteriaLocked(true);
       await requestMatch(matchToken);
       setTicket(matchToken);
       setMsg("🎯 Request submitted. We’ll notify you once another learner accepts.");
@@ -371,6 +390,7 @@ export default function Matching() {
       setStatus(null);
       setMsg("");
       setIsSearching(false);
+      setCriteriaLocked(false);
       setError(err.message || "Failed to start matching. Please try again.");
     } finally {
       setIsLoading(false);
@@ -405,6 +425,7 @@ export default function Matching() {
       setIsSearching(false);
       setIsPaused(false);
       setElapsedSeconds(0);
+      setCriteriaLocked(false);
     } catch (err) {
       setError(err.message || "Failed to cancel request.");
     }
@@ -449,6 +470,7 @@ export default function Matching() {
       setTicket(null);
       setIsSearching(false);
       setIsPaused(false);
+      setCriteriaLocked(false);
     } catch (err) {
       setError(err.message || "Failed to decline match.");
     }
@@ -488,6 +510,7 @@ export default function Matching() {
       setIsSearching(true);
       setIsPaused(false);
       setElapsedSeconds(0);
+      setCriteriaLocked(true);
     } catch (err) {
       setError(err.message || "Failed to retry search.");
     }
@@ -502,6 +525,7 @@ export default function Matching() {
     setIsPaused(false);
     setElapsedSeconds(0);
     setRelaxedDifficulties(new Set());
+    setCriteriaLocked(false);
     setMode("pair");
     setSelectedDifficulty(difficultyOptions[1] ?? difficultyOptions[0] ?? null);
     setSelectedTopics(new Set(topicOptions[0] ? [topicOptions[0]] : []));
@@ -534,7 +558,7 @@ export default function Matching() {
                 type="button"
                 className={mode === "pair" ? "is-active" : ""}
                 onClick={() => setMode("pair")}
-                disabled={isLoading || isSearching}
+                disabled={isLoading || isSearching || criteriaLocked}
               >
                 Pair Match
               </button>
@@ -542,7 +566,7 @@ export default function Matching() {
                 type="button"
                 className={mode === "solo" ? "is-active" : ""}
                 onClick={() => setMode("solo")}
-                disabled={isLoading || isSearching}
+                disabled={isLoading || isSearching || criteriaLocked}
               >
                 Solo Practice
               </button>
@@ -553,8 +577,12 @@ export default function Matching() {
             <label className="label">Difficulties</label>
             <div className="pill-grid">
               {difficultyOptions.map((diff) => {
+                const isLocked = criteriaLocked;
                 const isUserSelected = selectedDifficulty === diff;  // Check if this difficulty is selected
-                const disabled = selectedTopics.size === 3 || (isUserSelected && totalSelected === 1);  // Disable if 3 topics or if one difficulty is selected
+                const disabled =
+                  isLocked ||
+                  selectedTopics.size === 3 ||
+                  (isUserSelected && totalSelected === 1);  // Disable if 3 topics or if one difficulty is selected
 
                 return (
                   <button
@@ -580,7 +608,8 @@ export default function Matching() {
             <div className="pill-grid two-rows">
               {topicOptions.map((topic) => {
                 const checked = selectedTopics.has(topic);
-                const disabled = !checked && reachedLimit;
+                const isLocked = criteriaLocked;
+                const disabled = isLocked || (!checked && reachedLimit);
                 return (
                   <button
                     key={topic}

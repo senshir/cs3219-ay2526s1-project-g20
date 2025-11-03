@@ -25,7 +25,8 @@ app.use('/match', routes);
 // All /match routes require auth
 app.post('/match/requests', authMiddleware, async (req, res) => {
   const { difficulty, topics = [] } = req.body || {};
-  const out = await createRequest(req.user.id, { difficulty, topics });
+  const bearer = req.headers.authorization;
+  const out = await createRequest(req.user.id, { difficulty, topics }, bearer);
   res.json(out);
 });
 
@@ -39,13 +40,15 @@ app.post('/match/accept', authMiddleware, async (req, res) => {
 app.post('/match/decline', authMiddleware, async (req, res) => {
   const { pairId } = req.body || {};
   if (!pairId) return res.status(400).json({ error: 'pairId required' });
-  const out = await declineMatch(req.user.id, pairId);
+  const bearer = req.headers.authorization;
+  const out = await declineMatch(req.user.id, pairId, bearer);
   res.json(out);
 });
 
 app.post('/match/retry', authMiddleware, async (req, res) => {
   const { mode = 'same' } = req.body || {};
-  const out = await retryRequest(req.user.id, mode);
+  const bearer = req.headers.authorization;
+  const out = await retryRequest(req.user.id, mode, bearer);
   res.json(out);
 });
 

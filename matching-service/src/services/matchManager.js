@@ -35,12 +35,20 @@ const redis = new Redis(process.env.REDIS_URL || 'redis://127.0.0.1:6379');
 const TTL = Number(process.env.TTL_SECS || 120);
 const SWEEP = Number(process.env.SWEEPER_INTERVAL_SECS || 5);
 const ACCEPT_WIN = Number(process.env.ACCEPT_WINDOW_SECS || 25);
+const FALLBACK_DIFFS = ['Easy', 'Medium', 'Hard'];
 const FALLBACK_TOPICS = ["Algorithms", "Arrays", "Data Structures", "Strings", "Graphs"];
 
 // Allowable topics and difficulties
 async function getCanonicalLists(bearerToken) {
-  const { difficulties, topics } = await getQuestionMeta(bearerToken);
-  return { DIFFS: difficulties, ALL_TOPICS: topics };
+  try {
+    const { difficulties, topics } = await getQuestionMeta(bearerToken);
+    const DIFFS = Array.isArray(difficulties) && difficulties.length ? difficulties : FALLBACK_DIFFS;
+    const ALL_TOPICS = Array.isArray(topics) && topics.length ? topics : FALLBACK_TOPICS;
+    return { DIFFS, ALL_TOPICS };
+  } catch (err) {
+    console.warn('Question meta lookup failed, using fallback lists:', err?.message || err);
+    return { DIFFS: FALLBACK_DIFFS, ALL_TOPICS: FALLBACK_TOPICS };
+  }
 }
 
 
@@ -102,7 +110,7 @@ async function enqueueByCriteria(userId, { difficulty, topics }, seniorityTs, DI
       difficulty: difficulty || '',
       topics: JSON.stringify(topics || [])
     })
-    .hdel(reqKey(userId), 'pairId', 'expiresAt', 'sessionId')
+    .hdel(reqKey(userId), 'pairId', 'expiresAt', 'sessionId', 'lastEvent')
     .exec();
   console.log(`Setting status QUEUED for user ${userId}`);
   await redis.sadd(ACTIVE_USERS, String(userId));
@@ -363,7 +371,7 @@ export async function acceptMatch(userId, pairId) {
  * - The decliner becomes status=NONE (no active request).
  * - Pair record is cleaned up.
  */
-export async function declineMatch(userId, pairId) {
+export async function declineMatch(userId, pairId, bearerToken) {
   const pK = pairKey(pairId);
   const p = await redis.hgetall(pK);
   if (!p || !p.u1) return { error: 'Pair not found' };
@@ -375,7 +383,7 @@ export async function declineMatch(userId, pairId) {
   if (!other) return { error: 'Not part of this pair' };
 
   // Requeue the other (non-decliner)
-  await requeueFromStoredCriteria(other);
+  await requeueFromStoredCriteria(other, bearerToken);
   await redis.hset(reqKey(other), { lastEvent: 'PARTNER_DECLINED' });
 
   // Decliner becomes inactive
