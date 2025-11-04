@@ -1,7 +1,7 @@
 {
-  "name": "question-service",
+  "name": "chatbot-service",
   "version": "1.0.0",
-  "description": "Question management microservice for PeerPrep",
+  "description": "AI Chatbot microservice for PeerPrep",
   "main": "dist/index.js",
   "scripts": {
     "dev": "nodemon --exec ts-node src/index.ts",
@@ -9,31 +9,27 @@
     "start": "node dist/index.js",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage",
-    "test:db": "jest src/tests/simple.test.ts",
-    "test:api": "jest src/tests/api.test.ts",
-    "seed": "ts-node src/scripts/seedDatabase.ts",
-    "seed-leetcode": "ts-node src/scripts/seedLeetCodeQuestions.ts",
-    "add-questions": "ts-node src/scripts/addQuestions.ts",
-    "test:all": "npm run test:db && npm run test:api"
+    "test:coverage": "jest --coverage"
   },
   "keywords": [
     "peerprep",
-    "questions",
+    "chatbot",
+    "ai",
     "microservice"
   ],
   "author": "G20",
   "license": "MIT",
   "dependencies": {
     "express": "^4.18.2",
-    "mongoose": "^8.0.0",
     "dotenv": "^16.3.1",
     "cors": "^2.8.5",
     "express-validator": "^7.0.1",
     "morgan": "^1.10.0",
     "helmet": "^7.1.0",
     "compression": "^1.7.4",
-    "express-rate-limit": "^7.1.5"
+    "express-rate-limit": "^7.1.5",
+    "axios": "^1.6.0",
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
     "@types/express": "^4.17.20",
@@ -41,6 +37,7 @@
     "@types/morgan": "^1.9.7",
     "@types/node": "^20.8.0",
     "@types/compression": "^1.7.5",
+    "@types/uuid": "^9.0.7",
     "@types/supertest": "^2.0.16",
     "typescript": "^5.2.2",
     "ts-node": "^10.9.1",
@@ -54,3 +51,4 @@
     "ts-jest": "^29.1.1"
   }
 }
+
