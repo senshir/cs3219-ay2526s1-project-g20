@@ -15,6 +15,7 @@
     "seed": "ts-node src/scripts/seedDatabase.ts",
     "seed-leetcode": "ts-node src/scripts/seedLeetCodeQuestions.ts",
     "add-questions": "ts-node src/scripts/addQuestions.ts",
+    "add-test-cases": "ts-node src/scripts/addTestCasesToQuestions.ts",
     "test:all": "npm run test:db && npm run test:api"
   },
   "keywords": [

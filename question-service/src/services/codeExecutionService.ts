@@ -93,7 +93,11 @@ for idx, test_case in enumerate(test_cases):
         target = None
         
         # Handle Two Sum format: "nums = [2,7,11,15], target = 9"
-        if isinstance(input_data, str) and 'nums =' in input_data and 'target =' in input_data:
+        # Ensure input_data is a string
+        if not isinstance(input_data, str):
+            input_data = str(input_data)
+            
+        if 'nums =' in input_data and 'target =' in input_data:
             # Extract nums array - use non-greedy match to get first array
             nums_match = re.search(r'nums\s*=\s*(\[.*?\])', input_data)
             # Extract target number
@@ -131,8 +135,23 @@ for idx, test_case in enumerate(test_cases):
                     sig = inspect.signature(solution)
                     param_count = len(sig.parameters)
                     
-                    if param_count == 2 and isinstance(input_data, list) and len(input_data) == 2:
-                        result = solution(input_data[0], input_data[1])
+                    if param_count == 2:
+                        # Function expects 2 parameters
+                        if isinstance(input_data, list) and len(input_data) == 2:
+                            result = solution(input_data[0], input_data[1])
+                        else:
+                            # Try to parse input_data as JSON if it's a string
+                            if isinstance(input_data, str):
+                                try:
+                                    parsed = json.loads(input_data)
+                                    if isinstance(parsed, list) and len(parsed) == 2:
+                                        result = solution(parsed[0], parsed[1])
+                                    else:
+                                        result = solution(input_data)
+                                except:
+                                    result = solution(input_data)
+                            else:
+                                result = solution(input_data)
                     elif param_count == 1:
                         result = solution(input_data)
                     else:
@@ -185,9 +204,6 @@ print(json.dumps(results))
     const tempFile = path.join(this.TEMP_DIR, `code_${Date.now()}.py`);
 
     try {
-      // Write Python script to temp file
-      fs.writeFileSync(tempFile, pythonCode);
-
       // Write test cases to a separate file for Python to read
       const testCasesFile = path.join(this.TEMP_DIR, `testcases_${Date.now()}.json`);
       fs.writeFileSync(testCasesFile, JSON.stringify(testCases));
@@ -197,6 +213,8 @@ print(json.dumps(results))
         '# Read test cases from file (will be replaced with actual file path)\ntest_cases = []',
         `test_cases = json.load(open('${testCasesFile}', 'r'))`
       );
+
+      // Write Python script to temp file (after replacement)
       fs.writeFileSync(tempFile, pythonCodeWithFile);
 
       // Execute Python with timeout
