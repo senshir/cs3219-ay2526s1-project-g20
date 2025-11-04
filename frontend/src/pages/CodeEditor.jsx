@@ -252,7 +252,7 @@ int main() {
     return { results, output };
   };
 
-  const executePython = async (code, testCases) => {
+  const executeBackend = async (code, language, testCases) => {
     try {
       const response = await fetch(`${endpoints.questions}/api/questions/execute`, {
         method: 'POST',
@@ -261,7 +261,7 @@ int main() {
         },
         body: JSON.stringify({
           code,
-          language: 'python',
+          language: language,
           testCases
         })
       });
@@ -299,11 +299,11 @@ int main() {
       let executionResult;
       
       if (language === 'javascript' || language === 'typescript') {
-        // Execute JavaScript directly in browser
+        // Execute JavaScript directly in browser (faster, no network call)
         executionResult = executeJavaScript(code, question.testCases);
       } else {
-        // For other languages, send to backend
-        executionResult = await executePython(code, question.testCases);
+        // For other languages (Python, Java, C++, etc.), send to backend
+        executionResult = await executeBackend(code, language, question.testCases);
       }
       
       setTestResults(executionResult.results);

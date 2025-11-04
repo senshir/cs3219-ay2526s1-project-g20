@@ -21,8 +21,8 @@ RUN npm run build
 # Production stage
 FROM node:20-alpine AS production
 
-# Install dumb-init for proper signal handling
-RUN apk add --no-cache dumb-init
+# Install dumb-init and Python for code execution
+RUN apk add --no-cache dumb-init python3 py3-pip
 
 # Create app user for security
 RUN addgroup -g 1001 -S nodejs && \
