@@ -4,7 +4,28 @@ async function handleResponse(res) {
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     console.error("Server error details:", err); // Log the full error
-    throw new Error(err.detail || res.statusText || "Unknown error");
+    
+    // Handle FastAPI validation errors (err.detail is an array)
+    if (Array.isArray(err.detail)) {
+      const errorMessages = err.detail.map(e => {
+        if (typeof e === 'string') return e;
+        if (e.msg) return `${e.loc?.join('.') || 'Field'}: ${e.msg}`;
+        return JSON.stringify(e);
+      }).join(', ');
+      throw new Error(errorMessages || "Validation error");
+    }
+    
+    // Handle string error messages
+    if (typeof err.detail === 'string') {
+      throw new Error(err.detail);
+    }
+    
+    // Handle object error messages
+    if (err.detail && typeof err.detail === 'object') {
+      throw new Error(err.detail.message || JSON.stringify(err.detail));
+    }
+    
+    throw new Error(err.message || err.detail || res.statusText || "Unknown error");
   }
   return res.json();
 }
@@ -19,7 +40,23 @@ export async function registerUser({ username, email, password }) {
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     console.error("Registration failed:", err);
-    throw new Error(err.detail || err.message || "Registration failed");
+    
+    // Handle FastAPI validation errors (err.detail is an array)
+    if (Array.isArray(err.detail)) {
+      const errorMessages = err.detail.map(e => {
+        if (typeof e === 'string') return e;
+        if (e.msg) return `${e.loc?.join('.') || 'Field'}: ${e.msg}`;
+        return JSON.stringify(e);
+      }).join(', ');
+      throw new Error(errorMessages || "Registration failed");
+    }
+    
+    // Handle string error messages
+    if (typeof err.detail === 'string') {
+      throw new Error(err.detail);
+    }
+    
+    throw new Error(err.message || err.detail || "Registration failed");
   }
   const userData = await res.json();
 

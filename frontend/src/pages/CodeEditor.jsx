@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Editor from "@monaco-editor/react";
 import { initVimMode } from "monaco-vim";
+import { endpoints } from "../lib/api";
 import "../css/CodeEditor.css";
 
 export default function CodeEditor() {
@@ -25,7 +26,7 @@ export default function CodeEditor() {
 
   const fetchQuestion = async () => {
     try {
-      const response = await fetch(`http://localhost:3001/api/questions/${questionId}`);
+      const response = await fetch(`${endpoints.questions}/api/questions/${questionId}`);
       const result = await response.json();
       if (result.success) {
         setQuestion(result.data);
@@ -181,7 +182,7 @@ int main() {
     setChatLoading(true);
 
     try {
-      const response = await fetch('http://localhost:3002/api/chatbot/chat', {
+      const response = await fetch(`${endpoints.chatbot}/api/chatbot/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
