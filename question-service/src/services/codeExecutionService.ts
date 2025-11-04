@@ -87,16 +87,35 @@ for idx, test_case in enumerate(test_cases):
     try:
         # Parse input
         input_data = test_case['input']
-        try:
-            input_data = json.loads(input_data)
-        except:
-            pass
+        
+        # Handle Two Sum format: "nums = [2,7,11,15], target = 9"
+        if 'nums =' in input_data and 'target =' in input_data:
+            import re
+            nums_match = re.search(r'nums\s*=\s*(\[[^\]]+\])', input_data)
+            target_match = re.search(r'target\s*=\s*(\d+)', input_data)
+            if nums_match and target_match:
+                nums = json.loads(nums_match.group(1))
+                target = int(target_match.group(1))
+                input_data = [nums, target]
+        else:
+            # Try to parse as JSON
+            try:
+                input_data = json.loads(input_data)
+            except:
+                pass
         
         # Call solution function
+        # If input is array with 2 elements [nums, target], spread it
         if 'solution' in globals():
-            result = solution(input_data)
+            if isinstance(input_data, list) and len(input_data) == 2 and isinstance(input_data[0], list):
+                result = solution(input_data[0], input_data[1])
+            else:
+                result = solution(input_data)
         elif 'main' in globals():
-            result = main(input_data)
+            if isinstance(input_data, list) and len(input_data) == 2 and isinstance(input_data[0], list):
+                result = main(input_data[0], input_data[1])
+            else:
+                result = main(input_data)
         else:
             raise Exception("No solution or main function found")
         

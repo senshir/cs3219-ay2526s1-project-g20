@@ -162,24 +162,43 @@ int main() {
           // Parse input
           let input = testCase.input.trim();
           
-          // Try to parse as JSON (arrays, objects, numbers, strings)
+          // Handle Two Sum format: "nums = [2,7,11,15], target = 9"
+          // Extract array and target if present
           let parsedInput = input;
-          try {
-            parsedInput = JSON.parse(input);
-          } catch {
-            // If not valid JSON, try to handle special cases
-            // For arrays like "[1,2,3]" without quotes
-            if (input.startsWith('[') && input.endsWith(']')) {
-              try {
-                parsedInput = JSON.parse(input);
-              } catch {
-                // Keep as string
+          if (input.includes('nums =') && input.includes('target =')) {
+            // Extract nums array
+            const numsMatch = input.match(/nums\s*=\s*(\[[^\]]+\])/);
+            const targetMatch = input.match(/target\s*=\s*(\d+)/);
+            if (numsMatch && targetMatch) {
+              const nums = JSON.parse(numsMatch[1]);
+              const target = parseInt(targetMatch[1]);
+              parsedInput = [nums, target]; // Pass as array [nums, target]
+            }
+          } else {
+            // Try to parse as JSON (arrays, objects, numbers, strings)
+            try {
+              parsedInput = JSON.parse(input);
+            } catch {
+              // If not valid JSON, try to handle special cases
+              // For arrays like "[1,2,3]" without quotes
+              if (input.startsWith('[') && input.endsWith(']')) {
+                try {
+                  parsedInput = JSON.parse(input);
+                } catch {
+                  // Keep as string
+                }
               }
             }
           }
           
           // Call the solution function
-          const actualOutput = solutionFunc(parsedInput);
+          // If input is array with 2 elements [nums, target], spread it
+          let actualOutput;
+          if (Array.isArray(parsedInput) && parsedInput.length === 2 && Array.isArray(parsedInput[0])) {
+            actualOutput = solutionFunc(parsedInput[0], parsedInput[1]);
+          } else {
+            actualOutput = solutionFunc(parsedInput);
+          }
           
           // Convert output to string for comparison
           let actualOutputStr;
@@ -290,7 +309,17 @@ int main() {
     setOutput("Running your code...\n");
     setTestResults([]);
 
-    if (!question || !question.testCases || question.testCases.length === 0) {
+    // Use testCases if available, otherwise use examples
+    const testCasesToUse = question?.testCases && question.testCases.length > 0 
+      ? question.testCases 
+      : (question?.examples && question.examples.length > 0
+          ? question.examples.map(ex => ({
+              input: ex.input || '',
+              expectedOutput: ex.output || ''
+            }))
+          : null);
+
+    if (!question || !testCasesToUse || testCasesToUse.length === 0) {
       setOutput("No test cases available for this question.");
       return;
     }
@@ -300,10 +329,10 @@ int main() {
       
       if (language === 'javascript' || language === 'typescript') {
         // Execute JavaScript directly in browser (faster, no network call)
-        executionResult = executeJavaScript(code, question.testCases);
+        executionResult = executeJavaScript(code, testCasesToUse);
       } else {
         // For other languages (Python, Java, C++, etc.), send to backend
-        executionResult = await executeBackend(code, language, question.testCases);
+        executionResult = await executeBackend(code, language, testCasesToUse);
       }
       
       setTestResults(executionResult.results);
