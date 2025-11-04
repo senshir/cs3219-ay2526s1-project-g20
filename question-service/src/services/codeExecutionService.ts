@@ -92,27 +92,35 @@ for idx, test_case in enumerate(test_cases):
         nums = None
         target = None
         
-        # Handle Two Sum format: "nums = [2,7,11,15], target = 9"
+        # Handle different input formats
         # Ensure input_data is a string
         if not isinstance(input_data, str):
             input_data = str(input_data)
-            
+        
+        # Format 1: "nums = [2,7,11,15], target = 9"
         if 'nums =' in input_data and 'target =' in input_data:
-            # Extract nums array - use non-greedy match to get first array
             nums_match = re.search(r'nums\s*=\s*(\[.*?\])', input_data)
-            # Extract target number
             target_match = re.search(r'target\s*=\s*(-?\d+)', input_data)
-            
             if nums_match and target_match:
                 try:
-                    nums_str = nums_match.group(1).strip()
-                    nums = json.loads(nums_str)
+                    nums = json.loads(nums_match.group(1).strip())
                     target = int(target_match.group(1))
-                except Exception as e:
-                    # If parsing fails, nums and target remain None
+                except:
                     pass
+        # Format 2: "[2,7,11,15] 9" (array string followed by space and target)
+        elif isinstance(input_data, str) and input_data.strip().startswith('[') and ' ' in input_data:
+            # Split by space - last part should be target, first part should be array
+            parts = input_data.rsplit(' ', 1)
+            if len(parts) == 2:
+                try:
+                    nums_str = parts[0].strip()
+                    target_str = parts[1].strip()
+                    nums = json.loads(nums_str)
+                    target = int(target_str)
+                except:
+                    pass
+        # Format 3: Try to parse as JSON array with 2 elements
         elif isinstance(input_data, str):
-            # Try to parse as JSON
             try:
                 parsed = json.loads(input_data)
                 if isinstance(parsed, list) and len(parsed) == 2:
@@ -178,15 +186,21 @@ for idx, test_case in enumerate(test_cases):
         
         # Convert result to string
         if isinstance(result, (list, dict)):
-            result_str = json.dumps(result)
+            result_str = json.dumps(result, separators=(',', ':'))  # No spaces after commas
         else:
             result_str = str(result)
+        
+        # Normalize both outputs for comparison (remove all whitespace differences)
+        expected_normalized = test_case['expectedOutput'].strip().replace(' ', '').replace('\n', '').replace('\t', '')
+        actual_normalized = result_str.strip().replace(' ', '').replace('\n', '').replace('\t', '')
+        
+        passed = actual_normalized == expected_normalized
         
         results.append({
             'input': test_case['input'],
             'expectedOutput': test_case['expectedOutput'],
             'actualOutput': result_str,
-            'passed': result_str.strip() == test_case['expectedOutput'].strip(),
+            'passed': passed,
             'testCaseNumber': idx + 1
         })
     except Exception as e:
