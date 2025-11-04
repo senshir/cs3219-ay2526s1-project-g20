@@ -55,8 +55,9 @@ export default function CodeEditor() {
 
 # Test cases will be provided below
 `,
-      javascript: `function solution() {
+      javascript: `function solution(nums) {
     // TODO: Implement your solution here
+    // Example: return nums;
 }
 
 // Test cases will be provided below
@@ -135,42 +136,183 @@ int main() {
     setCode(getDefaultCode(newLang, question));
   };
 
-  const runCode = () => {
-    // Simple client-side code execution (for demonstration)
-    // In production, this should be done on the backend for security
+  const executeJavaScript = (code, testCases) => {
+    const results = [];
+    let output = "Running your code...\n\n";
+    
+    try {
+      // Execute user code to define functions/variables
+      eval(code);
+      
+      // Find the solution function
+      let solutionFunc = null;
+      if (typeof solution !== 'undefined') {
+        solutionFunc = solution;
+      } else if (typeof main !== 'undefined') {
+        solutionFunc = main;
+      }
+      
+      if (!solutionFunc || typeof solutionFunc !== 'function') {
+        throw new Error('Please define a function named "solution" or "main". Example: function solution(nums) { return nums; }');
+      }
+      
+      // Execute test cases
+      testCases.forEach((testCase, idx) => {
+        try {
+          // Parse input
+          let input = testCase.input.trim();
+          
+          // Try to parse as JSON (arrays, objects, numbers, strings)
+          let parsedInput = input;
+          try {
+            parsedInput = JSON.parse(input);
+          } catch {
+            // If not valid JSON, try to handle special cases
+            // For arrays like "[1,2,3]" without quotes
+            if (input.startsWith('[') && input.endsWith(']')) {
+              try {
+                parsedInput = JSON.parse(input);
+              } catch {
+                // Keep as string
+              }
+            }
+          }
+          
+          // Call the solution function
+          const actualOutput = solutionFunc(parsedInput);
+          
+          // Convert output to string for comparison
+          let actualOutputStr;
+          if (actualOutput === null || actualOutput === undefined) {
+            actualOutputStr = String(actualOutput);
+          } else if (typeof actualOutput === 'object') {
+            actualOutputStr = JSON.stringify(actualOutput);
+          } else {
+            actualOutputStr = String(actualOutput);
+          }
+          
+          const expectedOutput = String(testCase.expectedOutput).trim();
+          
+          // Normalize outputs for comparison (remove extra whitespace)
+          const normalizedActual = actualOutputStr.trim().replace(/\s+/g, ' ');
+          const normalizedExpected = expectedOutput.replace(/\s+/g, ' ');
+          
+          const passed = normalizedActual === normalizedExpected;
+          
+          results.push({
+            input: testCase.input,
+            expectedOutput: expectedOutput,
+            actualOutput: actualOutputStr,
+            passed,
+            testCaseNumber: idx + 1
+          });
+          
+        } catch (error) {
+          results.push({
+            input: testCase.input,
+            expectedOutput: testCase.expectedOutput,
+            actualOutput: `Error: ${error.message}`,
+            passed: false,
+            testCaseNumber: idx + 1
+          });
+        }
+      });
+      
+    } catch (error) {
+      // Error in code definition or execution
+      testCases.forEach((testCase, idx) => {
+        results.push({
+          input: testCase.input,
+          expectedOutput: testCase.expectedOutput,
+          actualOutput: `Error: ${error.message}`,
+          passed: false,
+          testCaseNumber: idx + 1
+        });
+      });
+    }
+    
+    const passedCount = results.filter(r => r.passed).length;
+    const totalCount = results.length;
+    
+    output += `Results: ${passedCount}/${totalCount} test cases passed.\n\n`;
+    
+    results.forEach((result) => {
+      output += `Test Case ${result.testCaseNumber}: ${result.passed ? '✓ PASSED' : '✗ FAILED'}\n`;
+      output += `  Input: ${result.input}\n`;
+      output += `  Expected: ${result.expectedOutput}\n`;
+      output += `  Got: ${result.actualOutput}\n\n`;
+    });
+    
+    if (passedCount === totalCount) {
+      output += "✓ All test cases passed! Well done!";
+    } else {
+      output += "✗ Some test cases failed. Try again.";
+    }
+    
+    return { results, output };
+  };
+
+  const executePython = async (code, testCases) => {
+    try {
+      const response = await fetch(`${endpoints.questions}/api/questions/execute`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          code,
+          language: 'python',
+          testCases
+        })
+      });
+      
+      const result = await response.json();
+      if (result.success) {
+        return result.data;
+      } else {
+        throw new Error(result.message || 'Execution failed');
+      }
+    } catch (error) {
+      return {
+        results: testCases.map((tc, idx) => ({
+          input: tc.input,
+          expectedOutput: tc.expectedOutput,
+          actualOutput: `Error: ${error.message}`,
+          passed: false,
+          testCaseNumber: idx + 1
+        })),
+        output: `Error executing code: ${error.message}`
+      };
+    }
+  };
+
+  const runCode = async () => {
     setOutput("Running your code...\n");
     setTestResults([]);
 
-    setTimeout(() => {
-      // Mock test execution
-      if (question && question.testCases) {
-        const results = question.testCases.map((testCase, idx) => {
-          // This is a mock execution - in production, send code to backend
-          const passed = Math.random() > 0.3; // Random for demo
-          return {
-            input: testCase.input,
-            expectedOutput: testCase.expectedOutput,
-            actualOutput: passed ? testCase.expectedOutput : "Error",
-            passed,
-            testCaseNumber: idx + 1
-          };
-        });
+    if (!question || !question.testCases || question.testCases.length === 0) {
+      setOutput("No test cases available for this question.");
+      return;
+    }
 
-        setTestResults(results);
-        
-        const passedCount = results.filter(r => r.passed).length;
-        const totalCount = results.length;
-        
-        setOutput(
-          `${passedCount}/${totalCount} test cases passed.\n` +
-          (passedCount === totalCount 
-            ? "✓ All test cases passed! Well done!" 
-            : "✗ Some test cases failed. Try again.")
-        );
+    try {
+      let executionResult;
+      
+      if (language === 'javascript' || language === 'typescript') {
+        // Execute JavaScript directly in browser
+        executionResult = executeJavaScript(code, question.testCases);
       } else {
-        setOutput("No test cases available for this question.");
+        // For other languages, send to backend
+        executionResult = await executePython(code, question.testCases);
       }
-    }, 1000);
+      
+      setTestResults(executionResult.results);
+      setOutput(executionResult.output);
+      
+    } catch (error) {
+      setOutput(`Error: ${error.message}`);
+      setTestResults([]);
+    }
   };
 
   const sendChatMessage = async () => {
