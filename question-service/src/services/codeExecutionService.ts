@@ -191,8 +191,9 @@ for idx, test_case in enumerate(test_cases):
             result_str = str(result)
         
         # Normalize both outputs for comparison (remove all whitespace differences)
-        expected_normalized = test_case['expectedOutput'].strip().replace(' ', '').replace('\n', '').replace('\t', '')
-        actual_normalized = result_str.strip().replace(' ', '').replace('\n', '').replace('\t', '')
+        import re
+        expected_normalized = re.sub(r'\\s+', '', test_case['expectedOutput'].strip())
+        actual_normalized = re.sub(r'\\s+', '', result_str.strip())
         
         passed = actual_normalized == expected_normalized
         
