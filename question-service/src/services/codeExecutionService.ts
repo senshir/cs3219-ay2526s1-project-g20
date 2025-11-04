@@ -76,44 +76,82 @@ export class CodeExecutionService {
     const pythonCode = `
 import json
 import sys
+import re
+import inspect
 
 ${code}
 
-# Read test cases from stdin
-test_cases = json.load(sys.stdin)
+# Read test cases from file (will be replaced with actual file path)
+test_cases = []
 
 results = []
 for idx, test_case in enumerate(test_cases):
     try:
         # Parse input
         input_data = test_case['input']
+        nums = None
+        target = None
         
         # Handle Two Sum format: "nums = [2,7,11,15], target = 9"
-        if 'nums =' in input_data and 'target =' in input_data:
-            import re
-            nums_match = re.search(r'nums\s*=\s*(\[[^\]]+\])', input_data)
-            target_match = re.search(r'target\s*=\s*(\d+)', input_data)
+        if isinstance(input_data, str) and 'nums =' in input_data and 'target =' in input_data:
+            # Extract nums array - use non-greedy match to get first array
+            nums_match = re.search(r'nums\s*=\s*(\[.*?\])', input_data)
+            # Extract target number
+            target_match = re.search(r'target\s*=\s*(-?\d+)', input_data)
+            
             if nums_match and target_match:
-                nums = json.loads(nums_match.group(1))
-                target = int(target_match.group(1))
-                input_data = [nums, target]
-        else:
+                try:
+                    nums_str = nums_match.group(1).strip()
+                    nums = json.loads(nums_str)
+                    target = int(target_match.group(1))
+                except Exception as e:
+                    # If parsing fails, nums and target remain None
+                    pass
+        elif isinstance(input_data, str):
             # Try to parse as JSON
             try:
-                input_data = json.loads(input_data)
+                parsed = json.loads(input_data)
+                if isinstance(parsed, list) and len(parsed) == 2:
+                    nums = parsed[0]
+                    target = parsed[1]
+                else:
+                    input_data = parsed
             except:
                 pass
         
         # Call solution function
-        # If input is array with 2 elements [nums, target], spread it
+        # If we have nums and target, pass them as separate arguments
         if 'solution' in globals():
-            if isinstance(input_data, list) and len(input_data) == 2 and isinstance(input_data[0], list):
-                result = solution(input_data[0], input_data[1])
+            # Priority: use extracted nums and target if available
+            if nums is not None and target is not None:
+                result = solution(nums, target)
             else:
-                result = solution(input_data)
+                # Fallback: try to determine function signature
+                try:
+                    sig = inspect.signature(solution)
+                    param_count = len(sig.parameters)
+                    
+                    if param_count == 2 and isinstance(input_data, list) and len(input_data) == 2:
+                        result = solution(input_data[0], input_data[1])
+                    elif param_count == 1:
+                        result = solution(input_data)
+                    else:
+                        # Last resort: try with input_data as single argument
+                        result = solution(input_data)
+                except Exception as e:
+                    # If signature inspection fails, try with input_data
+                    result = solution(input_data)
         elif 'main' in globals():
-            if isinstance(input_data, list) and len(input_data) == 2 and isinstance(input_data[0], list):
+            import inspect
+            sig = inspect.signature(main)
+            param_count = len(sig.parameters)
+            
+            if nums is not None and target is not None:
+                result = main(nums, target)
+            elif param_count == 2 and isinstance(input_data, list) and len(input_data) == 2:
                 result = main(input_data[0], input_data[1])
+            elif param_count == 1:
+                result = main(input_data)
             else:
                 result = main(input_data)
         else:
@@ -156,7 +194,7 @@ print(json.dumps(results))
 
       // Modify Python code to read from file
       const pythonCodeWithFile = pythonCode.replace(
-        'test_cases = json.load(sys.stdin)',
+        '# Read test cases from file (will be replaced with actual file path)\ntest_cases = []',
         `test_cases = json.load(open('${testCasesFile}', 'r'))`
       );
       fs.writeFileSync(tempFile, pythonCodeWithFile);
