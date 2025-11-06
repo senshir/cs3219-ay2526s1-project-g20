@@ -50,3 +50,39 @@ export async function getQuestionMeta(bearer) {
   cache = { diffs: difficulties, topics, fetchedAt: Date.now() };
   return { difficulties, topics };
 }
+
+export async function pickQuestionId(bearerToken, { difficulty = '', topics = [] }) {
+  const base = process.env.QUESTIONS_SVC_BASE;
+  if (!base) throw new Error('QUESTIONS_BASE_URL not set');
+
+  // Build candidate queries (prefer intersection/first topic)
+  const topicList = Array.isArray(topics) ? topics : [];
+  const candidates = [
+    // each selected topic paired with difficulty
+    ...topicList.map(t => ({ difficulty, category: t })),
+    // relax to difficulty only
+    { difficulty, category: '' },
+    // relax to any by topic (first topic)
+    topicList.length ? { difficulty: '', category: topicList[0] } : null,
+    // last resort: truly random
+    { difficulty: '', category: '' },
+  ].filter(Boolean);
+
+  for (const q of candidates) {
+    const params = new URLSearchParams();
+    if (q.difficulty) params.set('difficulty', q.difficulty);
+    if (q.category) params.set('category', q.category);
+    const url = `${base}/api/questions/random?${params.toString()}`;
+
+    try {
+      const resp = await fetch(url, { headers: { Authorization: bearerToken } });
+      if (!resp.ok) continue;
+      const json = await resp.json();
+      const id = json?.data?._id || json?.data?.id;
+      if (id) return id;
+    } catch {
+      // try next candidate
+    }
+  }
+  return null;
+}

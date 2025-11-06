@@ -44,9 +44,10 @@ export default function Matching() {
     const sessionId = payload.sessionId || payload.collabSessionId || payload.roomId;
     const wsUrl = payload.wsUrl || payload.collabWsUrl || payload.wsURL;
     const wsAuthToken = payload.wsAuthToken || payload.collabToken || payload.token;
+    const questionId = payload.questionId;
     if (sessionId && wsUrl && wsAuthToken) {
       const roomId = payload.roomId || payload.collabRoomId || sessionId;
-      return { sessionId, wsUrl, wsAuthToken, roomId };
+      return { sessionId, wsUrl, wsAuthToken, roomId, questionId };
     }
     return null;
   }
@@ -148,6 +149,7 @@ export default function Matching() {
                 wsUrl: info.wsUrl,
                 wsAuthToken: info.wsAuthToken,
                 roomId: info.roomId,
+                questionId: info.questionId,
               },
               replace: true,
             });

@@ -2,6 +2,7 @@ import fs from 'fs';
 import Redis from 'ioredis';
 import { createSession } from './collabClient.js';
 import { getQuestionMeta } from '../clients/questionClient.js';
+import { pickQuestionId } from '../clients/questionClient.js';
 
 /**
  * ============================
@@ -331,7 +332,7 @@ export async function createRequest(userId, { difficulty, topics = [] }, bearerT
  * - Marks the caller’s side as accepted.
  * - If both sides accepted → create collaboration session → set both to SESSION_READY and clean up pair.
  */
-export async function acceptMatch(userId, pairId) {
+export async function acceptMatch(userId, pairId, bearerToken) {
   const pK = pairKey(pairId);
   const p = await redis.hgetall(pK);
   if (!p || !p.u1) return { error: 'Pair not found' };
@@ -353,6 +354,22 @@ export async function acceptMatch(userId, pairId) {
   }
 
   if (updated.aAccepted === '1' && updated.bAccepted === '1') {
+    // Derive shared criteria
+    const aCrit = await getStoredCriteria(updated.u1); // { difficulty, topics }
+    const bCrit = await getStoredCriteria(updated.u2);
+    const difficulty =
+      (aCrit.difficulty && aCrit.difficulty === bCrit.difficulty) ? aCrit.difficulty :
+      (aCrit.difficulty || bCrit.difficulty || '');
+    const aTopics = new Set(aCrit.topics || []);
+    const bTopics = new Set(bCrit.topics || []);
+    const intersect = [...aTopics].filter(t => bTopics.has(t));
+    const topics = (intersect.length ? intersect :
+                    (aCrit.topics?.length ? aCrit.topics :
+                    (bCrit.topics || [])));
+
+    // Ask Question Service for a concrete problem id
+    const questionId = await pickQuestionId(bearerToken, { difficulty, topics });
+
     // Both accepted → create collab session and finalize
     const participants = [p.u1, p.u2];
     const session = await createSession({ participants });
@@ -363,6 +380,7 @@ export async function acceptMatch(userId, pairId) {
       roomId: session.roomId,
       wsUrl: session.wsUrl,
       wsAuthToken: session.tokens[p.u1],
+      questionId: questionId || '',
       lastEvent: 'BOTH_ACCEPTED'
     });
     await redis.hset(reqKey(p.u2), {
@@ -371,6 +389,7 @@ export async function acceptMatch(userId, pairId) {
       roomId: session.roomId,
       wsUrl: session.wsUrl,
       wsAuthToken: session.tokens[p.u2],
+      questionId: questionId || '',
       lastEvent: 'BOTH_ACCEPTED'
     });
     await redis.srem(ACTIVE_PAIRS, pairId);
@@ -423,6 +442,7 @@ export async function getStatus(userId) {
   if (r.roomId) out.roomId = r.roomId;
   if (r.wsUrl) out.wsUrl = r.wsUrl;
   if (r.wsAuthToken) out.wsAuthToken = r.wsAuthToken;
+  if (r.questionId) out.questionId = r.questionId;
 
   if (r.lastEvent) {
     out.event = r.lastEvent;
