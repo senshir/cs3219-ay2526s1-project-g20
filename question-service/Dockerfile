@@ -38,6 +38,9 @@ RUN npm ci --omit=dev && npm cache clean --force
 # Copy built application from builder stage
 COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
 
+# Copy sample questions file for seeding (if needed)
+COPY --from=builder --chown=nodejs:nodejs /app/sample-questions.json ./sample-questions.json
+
 # Switch to non-root user
 USER nodejs
 
