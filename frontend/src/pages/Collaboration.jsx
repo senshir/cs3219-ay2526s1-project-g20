@@ -119,6 +119,7 @@ export default function Collaboration() {
   useEffect(() => {
     // ytext.observe gives a delta array we can map to Monaco edits
     const onYTextEvent = (event) => {
+      if (event?.transaction?.local) return;  
       if (!editorRef.current || !modelRef.current) return;
       const editor = editorRef.current;
       const model = modelRef.current;
