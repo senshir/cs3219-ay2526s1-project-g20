@@ -12,7 +12,8 @@ export type ServerMessage =
   | { type: "YJS_UPDATE"; payloadB64: string }        // server -> clients
   | { type: "AWARENESS_UPDATE"; payloadB64: string }  // server -> clients
   | { type: "AWARENESS_SYNC"; payloadB64: string }    // initial states to a new client
-  | { type: "ERROR"; code: string; message: string };
+  | { type: "ERROR"; code: string; message: string }
+  | { type: "YJS_SYNC"; payloadB64: string };
 
 export function safeParse<T>(raw: string): T | null {
   try { return JSON.parse(raw) as T; } catch { return null; }

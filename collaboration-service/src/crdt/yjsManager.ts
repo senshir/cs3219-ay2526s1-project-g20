@@ -66,7 +66,14 @@ export class YjsManager {
     room.conns.set(ws, { userId });
     room.lastActive = Date.now();
 
-    // On join, send current document snapshot? Not needed: client can sync via updates.
+    // On join, send current document snapshot
+    if (ws.readyState === ws.OPEN) {
+      const snapshot = Y.encodeStateAsUpdate(room.doc);
+      if (snapshot && snapshot.length > 0) {
+        ws.send(JSON.stringify({ type: "YJS_SYNC", payloadB64: uint8ToB64(snapshot) }));
+      }
+    }
+
     // Send current awareness to the new client
     const states = room.awareness.getStates();
     if (ws.readyState === ws.OPEN && states.size > 0) {
