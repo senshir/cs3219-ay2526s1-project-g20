@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 
 const COLLAB_WS_PUBLIC_URL =
-  process.env.COLLAB_WS_PUBLIC_URL || 'ws://localhost:8090/ws';SS
+  process.env.COLLAB_WS_PUBLIC_URL || 'ws://localhost:8090/ws';
 const COLLAB_JWT_SECRET =
   process.env.COLLAB_JWT_SECRET || 'dev-collab-secret';
 const COLLAB_JWT_ISSUER =
