@@ -138,6 +138,21 @@ export default function Matching() {
         setIsSearching(false);
         setIsPaused(false);
         setCriteriaLocked(false);
+
+        if (!didNavigateRef.current) {
+          const info = getCollabInfo(nextStatus);
+          if (info) {
+            didNavigateRef.current = true;
+            navigate(`/collab/${info.sessionId}`, {
+              state: {
+                wsUrl: info.wsUrl,
+                wsAuthToken: info.wsAuthToken,
+                roomId: info.roomId,
+              },
+              replace: true,
+            });
+          }
+        }
         handled = true;
       } else if (state === "PENDING_ACCEPT" && !handled) {
         if (accepted && partnerAccepted) {
