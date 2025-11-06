@@ -1,9 +1,11 @@
 export const endpoints = {
-  users:       import.meta.env.VITE_USER_SERVICE_URL           || "http://localhost:8000",
-  questions:   import.meta.env.VITE_QUESTION_SERVICE_URL       || "http://localhost:3001",
-  interviews:  import.meta.env.VITE_INTERVIEWS_URL            || "http://localhost:8083",
-  match:       import.meta.env.VITE_MATCH_URL                 || "http://localhost:8084",
-  ws:          import.meta.env.VITE_WS_URL                    || "ws://localhost:8090",
+  users:       import.meta.env.VITE_USER_SERVICE_URL || import.meta.env.VITE_USERS_URL || "http://localhost:8000",
+  problems:    import.meta.env.VITE_PROBLEMS_URL    || "http://localhost:8082",
+  questions:   import.meta.env.VITE_QUESTION_SERVICE_URL || import.meta.env.VITE_QUESTIONS_URL || "http://localhost:3001",
+  chatbot:     import.meta.env.VITE_CHATBOT_URL     || "http://localhost:3002",
+  interviews:  import.meta.env.VITE_INTERVIEWS_URL  || "http://localhost:8083",
+  match:       import.meta.env.VITE_MATCH_URL       || "http://localhost:8084",
+  ws:          import.meta.env.VITE_WS_URL          || "ws://localhost:8090",
 };
 
 function authHeaders(token) {
