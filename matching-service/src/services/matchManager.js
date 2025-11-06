@@ -357,8 +357,22 @@ export async function acceptMatch(userId, pairId) {
     const participants = [p.u1, p.u2];
     const session = await createSession({ participants });
 
-    await redis.hset(reqKey(p.u1), { status: 'SESSION_READY', sessionId: session.sessionId, lastEvent: 'BOTH_ACCEPTED' });
-    await redis.hset(reqKey(p.u2), { status: 'SESSION_READY', sessionId: session.sessionId, lastEvent: 'BOTH_ACCEPTED' });
+    await redis.hset(reqKey(p.u1), {
+      status: 'SESSION_READY',
+      sessionId: session.sessionId,
+      roomId: session.roomId,
+      wsUrl: session.wsUrl,
+      wsAuthToken: session.tokens[p.u1],
+      lastEvent: 'BOTH_ACCEPTED'
+    });
+    await redis.hset(reqKey(p.u2), {
+      status: 'SESSION_READY',
+      sessionId: session.sessionId,
+      roomId: session.roomId,
+      wsUrl: session.wsUrl,
+      wsAuthToken: session.tokens[p.u2],
+      lastEvent: 'BOTH_ACCEPTED'
+    });
     await redis.srem(ACTIVE_PAIRS, pairId);
     await redis.del(pK);
   }
@@ -406,6 +420,9 @@ export async function getStatus(userId) {
   if (r.pairId) out.pairId = r.pairId;
   if (r.expiresAt) out.expiresAt = Number(r.expiresAt);
   if (r.sessionId) out.sessionId = r.sessionId;
+  if (r.roomId) out.roomId = r.roomId;
+  if (r.wsUrl) out.wsUrl = r.wsUrl;
+  if (r.wsAuthToken) out.wsAuthToken = r.wsAuthToken;
 
   if (r.lastEvent) {
     out.event = r.lastEvent;

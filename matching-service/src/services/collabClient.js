@@ -1,4 +1,3 @@
-// matching-service/src/services/collabClient.js
 import jwt from 'jsonwebtoken';
 
 const COLLAB_WS_PUBLIC_URL =
