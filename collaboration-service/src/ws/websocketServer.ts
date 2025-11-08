@@ -73,7 +73,7 @@ export async function initWebsocketServer(
           if (!roomId) return send(ws, { type: "ERROR", code: "ROOM_ID_REQUIRED", message: "roomId is required" });
 
           // optional enforcement
-          if (options.auth.requireRoomClaim && claims.roomId && claims.roomId !== roomId) {
+          if (options.auth.requireRoomClaim && claims.roomId !== roomId) {
             return send(ws, { type: "ERROR", code: "FORBIDDEN_ROOM", message: "Not allowed to join this room" });
           }
 
