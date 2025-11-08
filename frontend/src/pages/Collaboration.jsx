@@ -51,6 +51,7 @@ export default function Collaboration() {
   const suppressLocalRef = useRef(false);
   const joinedRef = useRef(false);
   const vimRef = useRef(null);
+  const suppressNetworkRef = useRef(false);
 
   // base64 helpers
   const toB64 = (u8) => btoa(String.fromCharCode(...u8));
@@ -98,10 +99,14 @@ export default function Collaboration() {
         if (!msg?.type) return;
         if (msg.type === "YJS_UPDATE" && msg.payloadB64) {
           const update = fromB64(msg.payloadB64);
+          suppressNetworkRef.current = true;
           Y.applyUpdate(ydoc, update);
+          suppressNetworkRef.current = false;
         } else if (msg.type === "YJS_SYNC" && msg.payloadB64) {
           const snapshot = fromB64(msg.payloadB64);
+          suppressNetworkRef.current = true;
           Y.applyUpdate(ydoc, snapshot);
+          suppressNetworkRef.current = false;
           setStatus("synced");
         } else if (msg.type === "ERROR" && msg.reason) {
           setStatus(`error: ${msg.reason}`);
@@ -125,6 +130,7 @@ export default function Collaboration() {
   useEffect(() => {
     const onUpdate = (update) => {
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+      if (suppressNetworkRef.current) return;
       if (suppressLocalRef.current) return;
       const b64 = toB64(update);
       wsRef.current.send(JSON.stringify({ type: "YJS_UPDATE", payloadB64: b64 }));
