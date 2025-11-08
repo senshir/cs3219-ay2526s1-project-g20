@@ -3,12 +3,13 @@ import "../css/EditProfileModal.css";
 import { updatePassword, updateUsername } from "../api/userService";
 import Modal from "./ProfilePopUpModal.jsx";
 
-export default function EditProfileModal({ user, onClose, onSave }) {
+export default function EditProfileModal({ user, onClose }) {
   const [username, setUsername] = useState(user.username || "");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+
 
   const handleSave = async () => {
     setLoading(true);
@@ -27,7 +28,6 @@ export default function EditProfileModal({ user, onClose, onSave }) {
       }
 
       setMessage("✅ Profile updated successfully!");
-      onSave({ ...user, username });
     } catch (err) {
       setMessage("❌ " + err.message);
     } finally {
