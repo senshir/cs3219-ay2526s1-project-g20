@@ -108,9 +108,8 @@ export default function Collaboration() {
           Y.applyUpdate(ydoc, snapshot);
           suppressNetworkRef.current = false;
           setStatus("synced");
-        } else if (msg.type === "ERROR" && msg.reason) {
-          setStatus(`error: ${msg.reason}`);
-          // setIsReadonly(true); // optional
+        } else if (msg.type === "ERROR" && msg.message) {
+          setStatus(`error: ${msg.message}`);
         }
       } catch {
         // ignore
