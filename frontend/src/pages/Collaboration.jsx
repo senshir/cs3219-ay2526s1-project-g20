@@ -8,7 +8,6 @@ import "../css/CodeEditor.css";
 
 /**
  * Collaboration.jsx — full-featured collab UI
- * - Same 3-panel layout as single practice page (Question | Code | Preppy)
  * - Monaco theme toggle, language select, Vim toggle, Run button & output
  * - Yjs incremental sync preserved; no local echo (event.transaction.local)
  * - Question can come via state.question OR state.questionId; else hidden
@@ -52,6 +51,7 @@ export default function Collaboration() {
   const joinedRef = useRef(false);
   const vimRef = useRef(null);
   const suppressNetworkRef = useRef(false);
+  const syncedRef = useRef(false);
 
   // base64 helpers
   const toB64 = (u8) => btoa(String.fromCharCode(...u8));
@@ -107,7 +107,16 @@ export default function Collaboration() {
           suppressNetworkRef.current = true;
           Y.applyUpdate(ydoc, snapshot);
           suppressNetworkRef.current = false;
+          syncedRef.current = true;
           setStatus("synced");
+          if (editorRef.current && modelRef.current) {
+            const textNow = ytext.toString();
+            if (modelRef.current.getValue() !== textNow) {
+              suppressLocalRef.current = true;
+              modelRef.current.setValue(textNow);
+              suppressLocalRef.current = false;
+            }
+          }
         } else if (msg.type === "ERROR" && msg.message) {
           setStatus(`error: ${msg.message}`);
         }
@@ -138,9 +147,12 @@ export default function Collaboration() {
     return () => ydoc.off("update", onUpdate);
   }, [ydoc]);
 
+  const lastTextRef = useRef("");
+
   // --- Incoming Y.Text deltas -> Monaco edits (remote only) ---
   useEffect(() => {
     const onYTextEvent = (event) => {
+      lastTextRef.current = ytext.toString();
       if (event?.transaction?.local) return; // prevent local echo
       if (!editorRef.current || !modelRef.current) return;
       const editor = editorRef.current;
@@ -227,8 +239,11 @@ export default function Collaboration() {
 
     monaco.editor.setTheme(theme);
 
-    // Initialize Monaco with current Y.Text content (if arrived first)
-    const initial = ytext.toString();
+    // Initialize Monaco with Yjs content
+    const textFromY = ytext.toString();
+    const mirror = lastTextRef.current || "";
+    const initial = textFromY || mirror;
+
     if (initial && modelRef.current.getValue() !== initial) {
       suppressLocalRef.current = true;
       modelRef.current.setValue(initial);
@@ -418,13 +433,12 @@ int main() {
   // Ensure the document has some initial code when both editor & question are ready
   useEffect(() => {
     if (!modelRef.current) return;
-    if (!ytext || ytext.length > 0) return;
     // Initialize shared text only once
+    if (!syncedRef.current) return;
+    if (!ytext || ytext.length > 0) return;
     Y.transact(ydoc, () => {
       ytext.insert(0, getDefaultCode(language));
     }, "init-template");
-    // Monaco will pull it through the observer
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [language, ytext, modelRef.current]);
 
   // Execute JS locally

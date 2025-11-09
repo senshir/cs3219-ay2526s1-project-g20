@@ -3,14 +3,14 @@ import type { WebSocket } from "ws";
 export interface ConnectionContext {
   socket: WebSocket;
   userId: string;
-  roomId?: string;        // set after JOIN_ROOM
-  lastSeen: number;       // for heartbeats
+  roomId?: string;
+  lastSeen: number;
 }
 
 export function makeContext(socket: WebSocket): ConnectionContext {
   return {
     socket,
-    userId: randomId("u"), // simple local id; swap to JWT later
+    userId: randomId("u"),
     lastSeen: Date.now(),
   };
 }

@@ -12,7 +12,7 @@ export interface AuthConfig {
 export interface UserClaims {
   userId: string;
   roles?: string[];
-  roomId?: string;         // optional: restrict joining
+  roomId?: string;
   [k: string]: any;
 }
 

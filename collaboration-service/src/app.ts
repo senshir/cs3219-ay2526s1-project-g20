@@ -10,7 +10,7 @@ export interface AppConfig {
   prometheusEnabled: boolean;
   serviceName: string;
   buildInfo?: Record<string, string | number>;
-  readinessChecks?: Array<() => Promise<void>>; // e.g., ping Redis
+  readinessChecks?: Array<() => Promise<void>>;
 }
 
 const metricsPlugin = fp(async (app: FastifyInstance) => {

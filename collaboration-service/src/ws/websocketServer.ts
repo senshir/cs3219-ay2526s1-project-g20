@@ -1,4 +1,4 @@
-// src/ws/websocketServer.ts
+import * as Y from "yjs";
 import { Server as HttpServer } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { RoomRegistry } from "../rooms/roomRegistry";
