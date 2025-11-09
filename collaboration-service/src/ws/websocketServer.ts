@@ -1,4 +1,4 @@
-// src/ws/websocketServer.ts
+import * as Y from "yjs";
 import { Server as HttpServer } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { RoomRegistry } from "../rooms/roomRegistry";
@@ -73,7 +73,7 @@ export async function initWebsocketServer(
           if (!roomId) return send(ws, { type: "ERROR", code: "ROOM_ID_REQUIRED", message: "roomId is required" });
 
           // optional enforcement
-          if (options.auth.requireRoomClaim && claims.roomId && claims.roomId !== roomId) {
+          if (options.auth.requireRoomClaim && claims.roomId !== roomId) {
             return send(ws, { type: "ERROR", code: "FORBIDDEN_ROOM", message: "Not allowed to join this room" });
           }
 

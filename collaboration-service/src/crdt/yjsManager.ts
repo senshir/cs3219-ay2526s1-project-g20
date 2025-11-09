@@ -19,7 +19,7 @@ export class YjsManager {
 
   constructor(
     private opts: {
-      idleMs?: number; // GC idle rooms
+      idleMs?: number;
       logger?: any;
     } = {}
   ) {}

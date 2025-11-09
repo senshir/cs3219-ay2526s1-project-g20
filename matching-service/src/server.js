@@ -33,7 +33,8 @@ app.post('/match/requests', authMiddleware, async (req, res) => {
 app.post('/match/accept', authMiddleware, async (req, res) => {
   const { pairId } = req.body || {};
   if (!pairId) return res.status(400).json({ error: 'pairId required' });
-  const out = await acceptMatch(req.user.id, pairId);
+  const bearer = req.headers.authorization;
+  const out = await acceptMatch(req.user.id, pairId, bearer);
   res.json(out);
 });
 
