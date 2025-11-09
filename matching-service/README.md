@@ -2,11 +2,25 @@
 
 A minimal matching microservice that pairs two users for coding practice based on **difficulty** and **topic**. Built with **Node.js (Express)**, **Redis**, and **Docker**.
 
-- 🚦 **Criteria**: The list of topics and difficulties is retrieved at runtime from the **Question Service**
-- 🪣 **Buckets model**: users are queued in FIFO “buckets” keyed by `(difficulty, topic)`
-- 🤝 **Handshake**: once paired, both must accept within a time window
-- 🧹 **Sweeper**: background job expires stale queue items and timed-out handshakes
-- 🔐 **Identity:** JWT `sub` (userId) from **User Service** is the canonical identifier.
+- **Criteria**: The list of topics and difficulties is retrieved at runtime from the **Question Service**
+- **Buckets model**: users are queued in FIFO “buckets” keyed by `(difficulty, topic)`
+- **Handshake**: once paired, both must accept within a time window
+- **Sweeper**: background job expires stale queue items and timed-out handshakes
+- **Identity:** JWT `sub` (userId) from **User Service** is the canonical identifier.
+
+## Technology Stack
+
+This microservice follows a lightweight REST-based architecture and uses the following core technologies:
+
+| Layer                       | Technology                                                        | Purpose                                                                                         |
+| --------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| **Runtime Environment**     | **Node.js (v20+)**                                                | Executes JavaScript on the server and provides asynchronous I/O for concurrent requests.        |
+| **Web Framework**           | **Express.js**                                                    | Handles HTTP routing, middleware, and REST endpoints.                                           |
+| **Data Store / Queue**      | **Redis (v7+)**                                                   | Acts as the in-memory database for user queues, match records, and time-based state management. |
+| **Containerization**        | **Docker**                                                        | Provides an isolated environment for deployment and testing.                                    |
+| **Authentication**          | **JWT (HS256 / RS256)**                                           | Verifies user identity via the User Service.                                                    |
+| **Integration Services**    | **Question Service**, **User Service**, **Collaboration Service** | Communicate through HTTP (REST) APIs for validation, profile retrieval, and session creation.   |
+| **Testing / Dev Utilities** | **Mock Services + cURL Scripts**                                  | Allow isolated local testing without other microservices.                                       |
 
 ---
 
@@ -50,7 +64,6 @@ When a user clicks **Find match**:
 - Each `(difficulty, topic)` is a queue.
 - If user selects `Easy + [AI]`, they go into queue `Q:Easy:AI`.
 - If they select `Easy` but **no** topic, they go into `Q:Easy:*` (all topics).
-- If they select a **topic** but **no** difficulty, they go into `Q:*:<topic>` (all diffs).
 - If both are selected, they enter the **cross product** (e.g., `Easy+AI`, `Easy+Trees`, …).
 
 ### FIFO & fairness
@@ -98,16 +111,15 @@ We keep data very simple (strings, lists, sets, hashes):
 
 - **F1**: Matching via criteria → buckets & `/match/requests`.
 - **F1.1**: Criteria are difficulty + topics (choose **1–3** categories total).
-- **F1.1.1**: Must choose ≥1 and ≤3 total (difficulty counts as 1; each topic counts as 1).
-- **F1.1.2**: No invalid criteria (validated against allowed lists).
-- **F1.1.3**: No default criteria → selecting none means “include all” for that axis.
+  - **F1.1.1**: Must choose ≥1 and ≤3 total (difficulty counts as 1; each topic counts as 1).
+  - **F1.1.2**: No invalid criteria (validated against allowed lists).
+  - **F1.1.3**: ONE difficulty must be selected, while 0-2 topics can be selected.
 - **F1.2**: Timeouts if no match → sweeper sets `EXPIRED`.
-- **F1.2.1**: Timeout notification → placeholder (websocket TODO).
-- **F1.2.2**: Both users must accept within a window → handshake + sweeper.
+  - **F1.2.2**: Both users must accept within a window → handshake + sweeper.
 - **F1.2.3**: Retry with relaxed criteria → `/match/retry` with `mode=broaden`.
 - **F1.3**: Fair & efficient queues → FIFO buckets + `seniorityTs`.
   - **F1.3.1**: Priority queue → FIFO per bucket.
-  - **F1.3.2**: Fairness for less-popular topics → (low priority; can extend later).
+  - **F1.3.2**: If a user cancels/declines, they can only be matched again after 30s (prevents rapid exit/join churn)
 
 ### NFR (Non-Functional Requirements)
 
@@ -161,7 +173,7 @@ or
 { "error": "Please select between 1 and 3 categories in total." }
 ```
 
-> 🧩 **Question Service Integration**  
+> **Question Service Integration**  
 > - The Matching Service fetches the canonical list of topics and difficulties from the **Question Service** automatically.  
 > - When users create a request, their chosen `difficulty` and `topics` are validated against these lists.  
 > - Stored fields (`difficulty`, `topics`) can be read later via `/match/status` to request or display corresponding questions.
@@ -189,7 +201,7 @@ If the user has no active request:
 { "status": "NONE" }
 ```
 
-> 🧭 **Used by Question & Collaboration Services**  
+> **Used by Question & Collaboration Services**  
 > - **Question Service:** can read `difficulty` and `topics` to recommend or assign relevant questions for the pair.  
 > - **Collaboration Service:** can read `pairId` and later `sessionId` once created to fetch session context.
 
@@ -212,7 +224,7 @@ or
 ```json
 { "error": "Pair not found" }
 ```
-> 🤝 Collaboration Service Integration
+> Collaboration Service Integration
 > - Rooms are created on-demand when the first client joins the WebSocket.
 > - After both users accept, the Matching Service publishes a `sessionId` (room id) via `/match/status`.
 > - Each client opens a WebSocket to the Collaboration Service using that `sessionId`:
@@ -276,7 +288,7 @@ or
 }
 ```
 
-> 🔁 **Note:** Topic relaxation has been removed — only difficulty is broadened.  
+> **Note:** Topic relaxation has been removed — only difficulty is broadened.  
 > This aligns with Question Service’s canonical topic list.
 
 ---
@@ -293,7 +305,7 @@ Removes user from all buckets and clears their request record.
 
 ---
 
-### 🔍 Summary of Service Integrations
+### Summary of Service Integrations
 
 | Service | Consumes / Affected Endpoint | Data Shared or Exposed | Purpose |
 |----------|-----------------------------|------------------------|----------|
@@ -382,12 +394,12 @@ USERS_SVC_BASE=http://user-service:8000
 
 ## Run locally (no Docker)
 
-1️⃣ **Install dependencies**
+1. **Install dependencies**
 ```bash
 npm ci
 ```
 
-2️⃣ **Start Redis**
+2. **Start Redis**
 ```bash
 npm ci
 # macOS (Homebrew)
@@ -398,7 +410,7 @@ brew services start redis
 docker run -d --name redis -p 6379:6379 redis:7-alpine
 ```
 
-3️⃣ **Start the service**
+3. **Start the service**
 ```bash
 node src/server.js
 # Output: Matching Service running on :3001
@@ -429,7 +441,7 @@ docker stop matching
 
 ## Quick demo with curl (includes Alice/Bob example)
 
-### 0️⃣ Health check
+### 0. Health check
 ```bash
 curl http://localhost:3001/health
 # {"ok":true,"service":"matching"}
@@ -437,7 +449,7 @@ curl http://localhost:3001/health
 
 ---
 
-### 1️⃣ Generate JWTs inside container
+### 1. Generate JWTs inside container
 ```bash
 ALICE=$(docker exec matching node -e "console.log(require('jsonwebtoken').sign({username:'alice'}, process.env.JWT_SECRET || 'devsecret', {expiresIn:'1h'}))")
 BOB=$(docker exec matching node -e "console.log(require('jsonwebtoken').sign({username:'bob'}, process.env.JWT_SECRET || 'devsecret', {expiresIn:'1h'}))")
@@ -445,7 +457,7 @@ BOB=$(docker exec matching node -e "console.log(require('jsonwebtoken').sign({us
 
 ---
 
-### 2️⃣ Both users join
+### 2. Both users join
 ```bash
 curl -X POST http://localhost:3001/match/requests \
   -H "Authorization: Bearer $ALICE" \
@@ -460,7 +472,7 @@ curl -X POST http://localhost:3001/match/requests \
 
 ---
 
-### 3️⃣ Check Alice’s status
+### 3. Check Alice’s status
 ```bash
 curl -H "Authorization: Bearer $ALICE" http://localhost:3001/match/status
 # Example:
@@ -469,7 +481,7 @@ curl -H "Authorization: Bearer $ALICE" http://localhost:3001/match/status
 
 ---
 
-### 4️⃣ Accept match from both
+### 4. Accept match from both
 ```bash
 PAIR=alice__bob__1760581692169
 
@@ -486,13 +498,13 @@ curl -X POST http://localhost:3001/match/accept \
 
 ---
 
-### 5️⃣ Verify session created
+### 5. Verify session created
 ```bash
 curl -H "Authorization: Bearer $ALICE" http://localhost:3001/match/status
 # {"status":"SESSION_READY","sessionId":"S_1760581716851",...}
 ```
 
-> 🕒 If you see `"Pair not found"`, it probably expired — set `ACCEPT_WINDOW_SECS=60` in `.env` and rebuild.
+> If you see `"Pair not found"`, it probably expired — set `ACCEPT_WINDOW_SECS=60` in `.env` and rebuild.
 
 ---
 

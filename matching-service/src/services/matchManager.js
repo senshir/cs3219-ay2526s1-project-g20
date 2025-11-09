@@ -139,6 +139,10 @@ async function requeueFromStoredCriteria(userId, bearerToken) {
  * - mode === 'broaden': relax difficulties by +-1
  **/
 export async function retryRequest(userId, mode = 'same', bearerToken) {
+  if (mode && mode !== 'same') {
+    console.warn(`retryRequest only supports mode="same" (got ${mode}) – falling back to same criteria.`);
+  }
+
   const r = await redis.hgetall(reqKey(userId));
   if (!r || !r.status) return { error: 'No request' };
 
@@ -148,33 +152,9 @@ export async function retryRequest(userId, mode = 'same', bearerToken) {
   const seniorityTs = Number(r.seniorityTs) || Date.now();
 
   const { DIFFS, ALL_TOPICS } = await getCanonicalLists(bearerToken);
-
-  if (mode === 'same') {
-    const keys = await enqueueByCriteria(userId, { difficulty, topics }, seniorityTs, DIFFS, ALL_TOPICS);
-    await tryMatch(userId, keys);
-    return { ok: true, mode: 'same' };
-  }
-
-  // Broaden: relax difficulty only
-  let newDifficulty = difficulty;
-  if (!difficulty || Math.random() < 0.5) {
-    newDifficulty = relaxDifficulty(difficulty, DIFFS) || difficulty;
-  }
-
-  const keys = await enqueueByCriteria(
-    userId,
-    { difficulty: newDifficulty, topics },
-    seniorityTs,
-    DIFFS,
-    ALL_TOPICS
-  );
+  const keys = await enqueueByCriteria(userId, { difficulty, topics }, seniorityTs, DIFFS, ALL_TOPICS);
   await tryMatch(userId, keys);
-
-  return {
-    ok: true,
-    mode: 'broaden',
-    applied: { difficulty: newDifficulty || '(all)', topics }
-  };
+  return { ok: true };
 }
 
 /** Safely remove a user from all bucket lists and cleanup tracking. */
@@ -218,25 +198,6 @@ async function getStoredCriteria(userId) {
   return { difficulty: difficulty || '', topics };
 }
 
-
-// --------- Criteria Relaxation Helpers (F1.2.3) ---------
-
-/** Adjacent difficulty helper: returns neighbors of a given diff (e.g., Medium → [Easy, Hard]) */
-function adjacentDifficulty(diff, DIFFS) {
-  const idx = DIFFS.indexOf(diff);
-  if (idx < 0) return [];
-  const out = [];
-  if (idx - 1 >= 0) out.push(DIFFS[idx - 1]);
-  if (idx + 1 < DIFFS.length) out.push(DIFFS[idx + 1]);
-  return out;
-}
-
-/** One-step difficulty relax: prefer the “easier” neighbor (or all if none selected) */
-function relaxDifficulty(difficulty, DIFFS) {
-  if (!difficulty) return '';     // empty means "all difficulties"
-  const adj = adjacentDifficulty(difficulty, DIFFS);
-  return adj[0] || difficulty;
-}
 
 // --------- Matching Core ---------
 

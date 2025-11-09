@@ -14,7 +14,6 @@ export default function Matching() {
 
   const [selectedDifficulty, setSelectedDifficulty] = useState(FALLBACK_DIFFICULTIES[1]);
   const [selectedTopics, setSelectedTopics] = useState(() => new Set([FALLBACK_TOPICS[0]]));
-  const [relaxedDifficulties, setRelaxedDifficulties] = useState(() => new Set());
 
   const [mode, setMode] = useState("pair");
   const [msg, setMsg] = useState("");
@@ -397,7 +396,6 @@ export default function Matching() {
       setIsSearching(true);
       setIsPaused(false);
       setElapsedSeconds(0);
-      setRelaxedDifficulties(new Set());
 
       const difficultyLabel =
         selectedDifficulty || selectedTopics.size === 0 ? selectedDifficulty ?? "any difficulty" : selectedDifficulty;
@@ -428,20 +426,6 @@ export default function Matching() {
       setError(err.message || "Failed to start matching. Please try again.");
     } finally {
       setIsLoading(false);
-    }
-  }
-
-  async function handleCheckStatus() {
-    if (!ticket) {
-      setError("Start a matching request first.");
-      return;
-    }
-    setError("");
-    try {
-      const result = await api.get("match", "/match/status", { token: ticket });
-      applyStatus(result);
-    } catch (err) {
-      setError(err.message || "Could not retrieve status.");
     }
   }
 
@@ -510,7 +494,7 @@ export default function Matching() {
     }
   }
 
-  async function handleRetry(mode = "same") {
+  async function handleRetry() {
     if (!ticket) {
       setError("Start a matching request first.");
       return;
@@ -519,27 +503,13 @@ export default function Matching() {
     try {
       const result = await api.post("match", "/match/retry", {
         token: ticket,
-        json: { mode },
       });
       if (result?.error) {
         setError(result.error);
         return;
       }
 
-      if (mode === "broaden") {
-        const next = new Set(relaxedDifficulties);
-        if (selectedDifficulty) next.add(selectedDifficulty);
-        const relaxed = result?.applied?.difficulty;
-        if (relaxed && relaxed !== "(all)") next.add(relaxed);
-        setRelaxedDifficulties(next);
-        setMsg(
-          relaxed && relaxed !== "(all)"
-            ? `🔁 Relaxed difficulty to include ${relaxed}. Searching again with broader matches.`
-            : "🔁 Relaxed criteria. Searching again with broader matches."
-        );
-      } else {
-        setMsg("🔁 Requeued with the same criteria.");
-      }
+      setMsg("🔁 Requeued with the same criteria.");
 
       setIsSearching(true);
       setIsPaused(false);
@@ -558,7 +528,6 @@ export default function Matching() {
     setIsSearching(false);
     setIsPaused(false);
     setElapsedSeconds(0);
-    setRelaxedDifficulties(new Set());
     setCriteriaLocked(false);
     setMode("pair");
     setSelectedDifficulty(difficultyOptions[1] ?? difficultyOptions[0] ?? null);
@@ -566,9 +535,8 @@ export default function Matching() {
   }
 
   const reachedLimit = totalSelected >= 3;
-  const showSuggestions = isSearching && elapsedSeconds >= 30;
-  const canRetry = Boolean(ticket && (!status || ["QUEUED", "EXPIRED"].includes(status.status)));
-  const canShowRelax = canRetry && showSuggestions && Boolean(selectedDifficulty);
+  const canRetry = Boolean(ticket && (!status || ["QUEUED", "EXPIRED"].includes(status?.status ?? 'NONE')));
+  const showRetry = isSearching && elapsedSeconds >= 30;
 
   return (
     <div className="matching">
@@ -678,12 +646,6 @@ export default function Matching() {
               </code>
             </div>
           )}
-          {showSuggestions && canRetry && (
-            <div className="msg-box">
-              Still waiting? Try relaxing your criteria or requeueing to stay near the front of the line.
-            </div>
-          )}
-
           {status?.status === "PENDING_ACCEPT" && (
             <div className="row btn-row">
               <button
@@ -708,27 +670,17 @@ export default function Matching() {
             >
               ⚡ Start Matching
             </button>
-            <button className="btn" type="button" onClick={handleCheckStatus} disabled={!ticket}>
-              Check Status
-            </button>
             <button className="btn" type="button" onClick={handleCancel} disabled={!ticket}>
               Cancel
             </button>
+            {showRetry && (
+              <button className="btn" type="button" onClick={handleRetry} disabled={!canRetry}>
+                Retry
+              </button>
+            )}
             <button className="btn" type="button" onClick={resetForm}>
               Clear
             </button>
-            {showSuggestions && (
-              <>
-                <button className="btn" type="button" onClick={() => handleRetry("same")} disabled={!canRetry}>
-                  Retry Same
-                </button>
-                {canShowRelax && (
-                  <button className="btn" type="button" onClick={() => handleRetry("broaden")} disabled={!canShowRelax}>
-                    Relax Criteria
-                  </button>
-                )}
-              </>
-            )}
           </div>
         </form>
       </div>
