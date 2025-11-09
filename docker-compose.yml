@@ -1,16 +1,13 @@
-version: '3.8'
-
 services:
   mongo:
     image: mongo:7.0
-    container_name: mongo
     ports:
       - "27017:27017"
     environment:
       - MONGO_INITDB_DATABASE=peerprep-questions 
     volumes:
       - mongo_data:/data/db
-      - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+      - ./question-service/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
     restart: unless-stopped
     networks:
       - app-network
@@ -20,11 +17,23 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    logging:
+      driver: "none"
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
 
   user-service:
     build:
       context: ./user_service
-    container_name: user-service
     ports:
       - "8000:8000"
     environment:
@@ -43,15 +52,14 @@ services:
     networks:
       - app-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health" ]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/').read()"]
       interval: 30s
-      timeout: 5s
-      retries: 3
+      timeout: 10s
+      retries: 5
 
   question-service:
     build:
       context: ./question-service
-    container_name: question-service
     ports:
       - "3001:3001"
     environment:
@@ -59,7 +67,10 @@ services:
       - MONGODB_URI=mongodb://mongo:27017/peerprep-questions 
       - PORT=3001
     depends_on:
-      - user-service
+      mongo:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - app-network
@@ -70,10 +81,67 @@ services:
       start_period: 5s
       retries: 3
 
+  matching-service:
+    build:
+      context: ./matching-service
+    ports:
+      - "8084:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - USER_SVC_BASE=http://user-service:8000
+      - QUESTIONS_SVC_BASE=http://question-service:3001
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=your-secret-key-here
+      - JWT_ALG=HS256
+      - ACCEPT_WINDOW_SECS=25
+      - TTL_SECS=120
+      - SWEEPER_INTERVAL_SECS=5
+      # for collaboration service
+      - COLLAB_WS_PUBLIC_URL=ws://localhost:8090/ws
+      - COLLAB_JWT_SECRET=dev-collab-secret
+      - COLLAB_JWT_ISSUER=peerprep-matching
+      - COLLAB_JWT_AUDIENCE=collab
+      - COLLAB_SESSION_TTL_MIN=120
+    depends_on:
+      redis:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      question-service:
+        condition: service_healthy
+      collaboration-service:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  collaboration-service:
+    build:
+      context: ./collaboration-service
+    container_name: collaboration-service
+    environment:
+      - PORT=8090
+      - HOST=0.0.0.0
+      - WS_PATH=/ws
+      - JWT_SECRET=dev-collab-secret
+      - JWT_ISSUER=peerprep-matching
+      - JWT_AUDIENCE=collab
+      - PROMETHEUS_ENABLED=true
+      - RECONNECT_GRACE_MS=5000
+    ports:
+      - "8090:8090"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8090/healthz')"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks:
+      - app-network
+
   frontend:
     build:
       context: ./frontend 
-    container_name: frontend
     ports:
       - "3000:3000"
     volumes:
@@ -81,9 +149,20 @@ services:
       - /app/node_modules
     environment:
       - NODE_ENV=development
+      - VITE_USER_SERVICE_URL=http://localhost:8000
+      - VITE_USERS_URL=http://localhost:8000
+      - VITE_QUESTION_SERVICE_URL=http://localhost:3001
+      - VITE_PROBLEMS_URL=http://localhost:3001
+      - VITE_MATCH_URL=http://localhost:8084
     depends_on:
-      - question-service
-      - user-service
+      question-service:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      matching-service:
+        condition: service_healthy
+      collaboration-service:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - app-network

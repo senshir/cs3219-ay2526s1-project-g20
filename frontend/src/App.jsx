@@ -5,6 +5,8 @@ import Dashboard from "./pages/Dashboard.jsx";
 import Problems from "./pages/Problems.jsx";
 import ProfilePage from "./pages/ProfilePage.jsx";
 import Matching from "./pages/Matching.jsx";
+import CodeEditor from "./pages/CodeEditor.jsx";
+import Collaboration from "./pages/Collaboration.jsx";
 import Modal from "./components/ProfilePopUpModal.jsx";
 import LoginModal from "./pages/LoginModal.jsx";
 import ProfileModal from "./pages/ProfileModal.jsx";
@@ -74,9 +76,15 @@ function AppContent() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/problems" element={<Problems />} />
           <Route path="/matching" element={<Matching />} />
+          <Route path="/collab/:sessionId" element={<Collaboration />} />
           <Route path="/profile" element={user ? <ProfilePage /> : <Navigate to="/" replace />} />
         </Routes>
       </main>
+
+      {/* Code editor renders outside container for full width */}
+      <Routes>
+        <Route path="/code/:questionId" element={<CodeEditor />} />
+      </Routes>
 
       {sheet === "profile" && (
         <Modal title="Your Profile" onClose={closeSheet} width={640}>

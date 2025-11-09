@@ -8,6 +8,7 @@ import {
 } from "../types";
 import { getPerformanceMetrics } from "../middleware/performance";
 import aiService from "../services/aiService";
+import codeExecutionService from "../services/codeExecutionService";
 
 // Simple in-memory cache for frequently accessed data
 const cache = new Map<string, { data: any; timestamp: number }>();
@@ -562,6 +563,47 @@ export class QuestionController {
       });
     }
   }
+
+  // Execute code with test cases
+  async executeCode(req: Request, res: Response): Promise<void> {
+    try {
+      const { code, language, testCases } = req.body;
+
+      if (!code || !language) {
+        res.status(400).json({
+          success: false,
+          message: "Code and language are required",
+        });
+        return;
+      }
+
+      if (!testCases || !Array.isArray(testCases) || testCases.length === 0) {
+        res.status(400).json({
+          success: false,
+          message: "Test cases array is required",
+        });
+        return;
+      }
+
+      const result = await codeExecutionService.executeCode(
+        code,
+        language,
+        testCases
+      );
+
+      res.status(200).json({
+        success: true,
+        data: result,
+      });
+    } catch (error: any) {
+      console.error("Error executing code:", error);
+      res.status(500).json({
+        success: false,
+        message: error.message || "Failed to execute code",
+      });
+    }
+  }
 }
 
 export default new QuestionController();
+
