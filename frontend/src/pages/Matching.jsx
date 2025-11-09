@@ -1,4 +1,5 @@
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import "../css/Matching.css";
 import { api } from "../lib/api";
 import { AuthContext } from "../context/AuthContext";
@@ -33,6 +34,22 @@ export default function Matching() {
   const [status, setStatus] = useState(null);
 
   const totalSelected = (selectedDifficulty ? 1 : 0) + selectedTopics.size;
+
+  const navigate = useNavigate()
+  const didNavigateRef = useRef(false)
+
+  // Extract collaboration session details from a status payload (supports a few common keys)
+  function getCollabInfo(payload) {
+    if (!payload) return null;
+    const sessionId = payload.sessionId || payload.collabSessionId || payload.roomId;
+    const wsUrl = payload.wsUrl || payload.collabWsUrl || payload.wsURL;
+    const wsAuthToken = payload.wsAuthToken || payload.collabToken || payload.token;
+    if (sessionId && wsUrl && wsAuthToken) {
+      const roomId = payload.roomId || payload.collabRoomId || sessionId;
+      return { sessionId, wsUrl, wsAuthToken, roomId };
+    }
+    return null;
+  }
 
   const applyStatus = useCallback(
     (nextStatus, { fromPoll = false } = {}) => {
@@ -121,6 +138,21 @@ export default function Matching() {
         setIsSearching(false);
         setIsPaused(false);
         setCriteriaLocked(false);
+
+        if (!didNavigateRef.current) {
+          const info = getCollabInfo(nextStatus);
+          if (info) {
+            didNavigateRef.current = true;
+            navigate(`/collab/${info.sessionId}`, {
+              state: {
+                wsUrl: info.wsUrl,
+                wsAuthToken: info.wsAuthToken,
+                roomId: info.roomId,
+              },
+              replace: true,
+            });
+          }
+        }
         handled = true;
       } else if (state === "PENDING_ACCEPT" && !handled) {
         if (accepted && partnerAccepted) {

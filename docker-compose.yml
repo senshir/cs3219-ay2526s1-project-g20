@@ -97,6 +97,12 @@ services:
       - ACCEPT_WINDOW_SECS=25
       - TTL_SECS=120
       - SWEEPER_INTERVAL_SECS=5
+      # for collaboration service
+      - COLLAB_WS_PUBLIC_URL=ws://localhost:8090/ws
+      - COLLAB_JWT_SECRET=dev-collab-secret
+      - COLLAB_JWT_ISSUER=peerprep-matching
+      - COLLAB_JWT_AUDIENCE=collab
+      - COLLAB_SESSION_TTL_MIN=120
     depends_on:
       redis:
         condition: service_healthy
@@ -104,7 +110,31 @@ services:
         condition: service_healthy
       question-service:
         condition: service_healthy
+      collaboration-service:
+        condition: service_healthy
     restart: unless-stopped
+    networks:
+      - app-network
+
+  collaboration-service:
+    build:
+      context: ./collaboration-service
+    container_name: collaboration-service
+    environment:
+      - PORT=8090
+      - HOST=0.0.0.0
+      - WS_PATH=/ws
+      - JWT_SECRET=dev-collab-secret
+      - JWT_ISSUER=peerprep-matching
+      - JWT_AUDIENCE=collab
+      - PROMETHEUS_ENABLED=true
+    ports:
+      - "8090:8090"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8090/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
     networks:
       - app-network
 
@@ -129,6 +159,8 @@ services:
       user-service:
         condition: service_healthy
       matching-service:
+        condition: service_healthy
+      collaboration-service:
         condition: service_healthy
     restart: unless-stopped
     networks:
