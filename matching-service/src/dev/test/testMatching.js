@@ -1,8 +1,8 @@
 import {
   createRequest, getStatus, acceptMatch, declineMatch,
   cancelMyRequest, retryRequest, startSweeper
-} from '../..services/matchManager.js';
-  
+} from '../../services/matchManager.js';
+
 import Redis from 'ioredis';
 
 const redis = new Redis(process.env.REDIS_URL || 'redis://127.0.0.1:6379');
