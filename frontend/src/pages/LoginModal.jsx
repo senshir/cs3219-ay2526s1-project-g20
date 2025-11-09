@@ -1,5 +1,6 @@
 import React, { useState, useContext } from "react";
 import { AuthContext } from "../context/AuthContext";
+import PasswordField from "../components/PasswordField";
 import '../css/LoginModal.css';
 
 export default function LoginModal({ onClose }) {
@@ -79,19 +80,18 @@ export default function LoginModal({ onClose }) {
       </div>
 
       <div>
-        <label className="label">Password (min. 8
-           letters with  requiring at least one upper- and lowercase,
-            numeric, and special character )</label>
-        <input className="input" name="password" type="password" required />
+        <PasswordField 
+          label="Password (min. 8 characters, including at least one uppercase, one lowercase, one number, and one special character)"
+          name="password"
+          required
+        />
       </div>
 
       {!isLogin && (
         <div>
-          <label className="label">Confirm Password</label>
-          <input
-            className="input"
+          <PasswordField 
+            label="Confirm Password"
             name="confirmPassword"
-            type="password"
             required
           />
         </div>

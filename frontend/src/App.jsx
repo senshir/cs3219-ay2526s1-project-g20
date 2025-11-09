@@ -45,7 +45,8 @@ export default function App() {
 function AppContent() {
   const navigate = useNavigate();
   const { user, loading, logout } = useContext(AuthContext);
-  const [sheet, setSheet] = useState(null); // 'profile' | null
+  const [sheet, setSheet] = useState(null); // 'profile' | null\
+  const location = useLocation();
 
   const openProfile = () => setSheet("profile");
   const closeSheet = () => setSheet(null);
@@ -66,6 +67,8 @@ function AppContent() {
     );
   }
 
+  const isCollaborationPage = location.pathname.startsWith("/collab");
+
   return (
     <div className="page">
       <Nav user={user} onAvatar={openProfile} />
@@ -78,7 +81,7 @@ function AppContent() {
         </Routes>
       </main>
 
-      {sheet === "profile" && (
+      {!isCollaborationPage && sheet === "profile" && (
         <Modal title="Your Profile" onClose={closeSheet} width={640}>
           <ProfileModal user={user} onLogout={logout} onClose={closeSheet} />
         </Modal>

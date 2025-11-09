@@ -45,7 +45,7 @@ async def update_password(
 ):
     """Update logged-in user's password via UserService"""
     user_id = str(current_user["_id"])
-    return await UserService.update_password(  # Delegate to UserService
+    return await UserService.update_password(
         user_id=user_id,
         update_data=update_data
     )
