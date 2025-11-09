@@ -95,10 +95,12 @@ export async function initWebsocketServer(
         case "LEAVE_ROOM": {
           if (!ctx.roomId) return;
           const prev = ctx.roomId;
-          rooms.leave(prev, ws);
+          const remainingPeers = rooms.leave(prev, ws);
           y.leave(prev, ws);
           ctx.roomId = undefined;
-          send(ws, { type: "LEFT", roomId: prev });
+          for (const peer of remainingPeers) {
+            send(peer, { type: "LEFT", roomId: prev });
+          }
           return;
         }
 
@@ -126,8 +128,12 @@ export async function initWebsocketServer(
     ws.on("close", () => {
       if ((ws as any).__ctx?.roomId) {
         const rid = (ws as any).__ctx.roomId;
-        rooms.leave(rid, ws);
+        const remainingPeers = rooms.leave(rid, ws);
         y.leave(rid, ws);
+
+        for (const peer of remainingPeers) {
+          send(peer, { type: "LEFT", roomId: rid });
+        }
       } else {
         rooms.leaveAll(ws);
         y.leaveAll(ws);
