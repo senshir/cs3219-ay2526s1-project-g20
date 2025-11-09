@@ -1,4 +1,6 @@
-import React from "react";
+import React, { useContext, useState } from "react";
+import { AuthContext } from "../context/AuthContext";
+import EditProfileModal from "../components/EditProfileModal";
 import "../css/ProfilePage.css";
 
 function Stat({ icon, label, value }) {
@@ -31,8 +33,12 @@ function Row({ title, subtitle, status }) {
   );
 }
 
-export default function ProfilePage({ user }) {
-  const initials = (user?.name || "AC")
+export default function ProfilePage() {
+  const { user, logout , setUser } = useContext(AuthContext);
+  const [showEdit, setShowEdit] = useState(false);
+  if (!user) return <div>Loading...</div>;
+
+  const initials = (user.username)
     .split(" ")
     .map((s) => s[0])
     .join("")
@@ -43,8 +49,8 @@ export default function ProfilePage({ user }) {
     <div className="profile-page">
       <h1 className="h1">PeerPrep User Profile</h1>
       <p className="kicker">
-        Comprehensive user dashboard showing coding statistics, match history,
-        achievements, and skill progression
+        View and manage your profile, track your progress, and review your
+        activity.
       </p>
 
       <section className="card profile-header-card">
@@ -56,19 +62,13 @@ export default function ProfilePage({ user }) {
             </div>
             <div>
               <div className="user-info">
-                <h2>{user?.username || "Alex Chen"}</h2>
+                <h2>{user.username}</h2>
                 <span className="badge badge--pill badge--soft">
                   Active Member
                 </span>
               </div>
               <div className="kicker">
-                {user?.email || "alex.chen@example.com"}
-              </div>
-              <div className="stats-row">
-                <Stat value="47" label="Total Sessions" icon={"👥"} />
-                <Stat value="23" label="Problems Solved" icon={"✅"} />
-                <Stat value="142h" label="Total Hours" icon={"⏱️"} />
-                <Stat value="7" label="Day Streak" icon={"📈"} />
+                {user.email}
               </div>
               <div className="tags">
                 <span className="tag">JavaScript</span>
@@ -78,60 +78,20 @@ export default function ProfilePage({ user }) {
               </div>
             </div>
           </div>
-          <button className="btn">Edit Profile</button>
-        </div>
-
-        <div className="segmented">
-          <button className="is-active">Overview</button>
-          <button>Match History</button>
-          <button>Achievements</button>
-          <button>Skills</button>
+          <button className="btn" onClick={() => setShowEdit(true)}>Edit Profile</button>
         </div>
       </section>
 
-      <section className="grid-row">
-        <div className="card">
-          <h3>Performance Stats</h3>
-          <div className="p-muted">
-            Success Rate <span className="right">78%</span>
-          </div>
-          <div className="bar">
-            <div style={{ width: "78%" }} />
-          </div>
-
-          <div className="p-muted">
-            Avg. Session Time <span className="right">45m</span>
-          </div>
-          <div className="bar">
-            <div style={{ width: "45%" }} />
-          </div>
-
-          <div className="p-muted">
-            Member since <span className="right">March 2024</span>
-          </div>
-        </div>
-
-        <div className="card">
-          <h3>Recent Activity</h3>
-          <div className="list">
-            <Row
-              title="Two Sum"
-              subtitle="with Sarah Kim • 32min • 2024-03-15"
-              status="Completed"
-            />
-            <Row
-              title="Binary Tree Traversal"
-              subtitle="with Mike Johnson • 58min • 2024-03-14"
-              status="Completed"
-            />
-            <Row
-              title="Longest Palindrome"
-              subtitle="with Emma Wilson • 67min • 2024-03-13"
-              status="Incomplete"
-            />
-          </div>
-        </div>
-      </section>
+      {showEdit && (
+        <EditProfileModal
+          user={user}
+          onClose={() => setShowEdit(false)}
+          onSave={(updatedUser) => {
+            setUser(updatedUser);
+            setShowEdit(false);
+          }}
+        />
+      )}
     </div>
   );
 }

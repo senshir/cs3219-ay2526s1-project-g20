@@ -159,68 +159,6 @@
 }
 
 /***************************************************
- * PROGRESS BARS
- ***************************************************/
-.bar {
-  background: #eee;
-  height: 6px;
-  border-radius: 4px;
-  overflow: hidden;
-  margin-bottom: 10px;
-}
-
-.bar div {
-  background: #333;
-  height: 100%;
-}
-
-/***************************************************
- * BADGES
- ***************************************************/
-.badge {
-  background: #f3f4f6;
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-size: 0.8rem;
-  color: #333;
-}
-
-.badge--pill {
-  border-radius: 9999px;
-}
-
-.badge--soft {
-  background: #e0e7ff;
-  color: #3730a3;
-}
-
-.badge--dark {
-  background: #333;
-  color: white;
-}
-
-/***************************************************
- * LIST ITEMS
- ***************************************************/
-.item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 0;
-  border-bottom: 1px solid #eee;
-}
-
-.item-title {
-  font-weight: 600;
-  font-size: 14px;
-}
-
-.meta {
-  font-size: 0.85rem;
-  color: #777;
-}
-
-/***************************************************
  * BUTTONS
  ***************************************************/
 .btn {
@@ -245,73 +183,6 @@
   display: grid;
   gap: 16px;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-}
-
-/***************************************************
- * DARK MODE SUPPORT
- ***************************************************/
-@media (prefers-color-scheme: dark) {
-  .profile-page {
-    background: #121212;
-    color: #f5f5f5;
-  }
-
-  .card {
-    background: #1f1f1f;
-    border-color: #333;
-  }
-
-  .avatar-lg {
-    background: #555;
-    color: #fff;
-  }
-
-  .segment button {
-    background: #1e1e1e;
-    color: #ddd;
-  }
-
-  .segment button.is-active {
-    background: #fff;
-    color: #000;
-  }
-
-  .bar {
-    background: #333;
-  }
-
-  .bar div {
-    background: #888;
-  }
-
-  .badge {
-    background: #333;
-    color: #ccc;
-  }
-
-  .badge--dark {
-    background: #fff;
-    color: #000;
-  }
-
-  .tag {
-    background: #2a2a2a;
-    color: #ddd;
-  }
-
-  .btn {
-    background: #2b2b2b;
-    color: #eee;
-    border-color: #444;
-  }
-
-  .btn:hover {
-    background: #3a3a3a;
-  }
-
-  .meta {
-    color: #aaa;
-  }
 }
 
 /***************************************************
@@ -355,3 +226,4 @@
     width: 100%;
   }
 }
+

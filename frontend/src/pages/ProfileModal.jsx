@@ -1,8 +1,13 @@
-import React from "react";
+import React, { useContext } from "react";
+import { AuthContext } from "../context/AuthContext";
 import { Link } from "react-router-dom";
-import "../css/Profile.css"; // Import the CSS file
+import "../css/ProfileModal.css";
 
-export default function ProfileModal({ user, onLogout, onClose }) {
+export default function ProfileModal({ onClose }) {
+  const { user, logout } = useContext(AuthContext);
+
+  if (!user) return <div>Loading...</div>;
+
   const initials = (user?.username || "JD")
     .split(" ")
     .map((s) => s[0])
@@ -18,8 +23,8 @@ export default function ProfileModal({ user, onLogout, onClose }) {
           <span className="dot" />
         </div>
         <div>
-          <div className="username">{user?.username || "John Doe"}</div>
-          <div className="kicker">{user?.email || "john.doe@example.com"}</div>
+          <div className="username">{user.username}</div>
+          <div className="kicker">{user.email}</div>
         </div>
       </div>
 
@@ -45,7 +50,7 @@ export default function ProfileModal({ user, onLogout, onClose }) {
         <Link className="btn" to="/profile" onClick={onClose}>
           Full Profile
         </Link>
-        <button className="btn btn--logout" onClick={onLogout}>
+        <button className="btn btn--logout" onClick={logout}>
           Log out
         </button>
       </div>

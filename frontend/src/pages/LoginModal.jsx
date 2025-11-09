@@ -1,28 +1,43 @@
-import React, { useState } from "react";
-import '../css/Login.css';
+import React, { useState, useContext } from "react";
+import { AuthContext } from "../context/AuthContext";
+import '../css/LoginModal.css';
 
-export default function LoginModal({ onClose, onLogin }) {
+export default function LoginModal({ onClose }) {
+  const { login, register } = useContext(AuthContext);
   const [mode, setMode] = useState("login"); // 'login' | 'signup'
+  const [error, setError] = useState("");
   const isLogin = mode === "login";
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(e.currentTarget).entries());
+    setError("");
     if (!isLogin && data.password !== data.confirmPassword) {
       alert("Passwords do not match");
       return;
     }
-    // Demo auth: accept anything. Hook your real API here.
-    const user = {
-      name: data.username || "John Doe",
-      email: data.email,
-    };
-    onLogin?.(user);
-    onClose?.();
+    try {
+      if (isLogin) {
+        // login with email/password
+        await login(data.email, data.password);
+      } else {
+        // signup with email, password, username
+        await register({
+          email: data.email,
+          password: data.password,
+          username: data.username,
+        });
+      }
+      onClose?.();
+    } catch (err) {
+      console.error("Auth error:", err.message);
+      setError(err?.message || "Something went wrong");
+    }
   }
 
   return (
     <form className="list login-modal" onSubmit={handleSubmit}>
+      {error && <div className="error-msg">{error}</div>}
       <div className="segmented">
         <button
           type="button"
@@ -46,7 +61,7 @@ export default function LoginModal({ onClose, onLogin }) {
           <input
             className="input"
             name="username"
-            placeholder="Alex Chen"
+            placeholder="Alex_Chen"
             required
           />
         </div>
@@ -64,7 +79,9 @@ export default function LoginModal({ onClose, onLogin }) {
       </div>
 
       <div>
-        <label className="label">Password</label>
+        <label className="label">Password (min. 8
+           letters with  requiring at least one upper- and lowercase,
+            numeric, and special character )</label>
         <input className="input" name="password" type="password" required />
       </div>
 
