@@ -16,6 +16,30 @@ interface WSInitOptions {
 const HEARTBEAT_MS = Number(process.env.HEARTBEAT_INTERVAL_MS ?? 30_000);
 const HEARTBEAT_MULTIPLIER = Number(process.env.HEARTBEAT_TIMEOUT_MULTIPLIER ?? 10);
 
+const RECONNECT_GRACE_MS = Number(process.env.RECONNECT_GRACE_MS ?? 5000);
+
+// roomId -> (userId -> Timeout)
+const pendingLeaves = new Map<string, Map<string, NodeJS.Timeout>>();
+
+function getPendingMap(roomId: string) {
+  let m = pendingLeaves.get(roomId);
+  if (!m) {
+    m = new Map<string, NodeJS.Timeout>();
+    pendingLeaves.set(roomId, m);
+  }
+  return m;
+}
+
+function cancelPendingLeave(roomId: string, userId: string) {
+  const m = pendingLeaves.get(roomId);
+  if (!m) return;
+  const t = m.get(userId);
+  if (t) {
+    clearTimeout(t);
+    m.delete(userId);
+  }
+}
+
 export async function initWebsocketServer(
   httpServer: HttpServer,
   options: WSInitOptions
@@ -84,6 +108,8 @@ export async function initWebsocketServer(
           }
           ctx.roomId = roomId;
 
+          cancelPendingLeave(roomId, ctx.userId);
+
           // join registries
           const participants = rooms.join(roomId, ws);
           y.join(roomId, ws, ctx.userId);
@@ -98,6 +124,8 @@ export async function initWebsocketServer(
           const remainingPeers = rooms.leave(prev, ws);
           y.leave(prev, ws);
           ctx.roomId = undefined;
+          cancelPendingLeave(prev, ctx.userId);
+          send(ws, { type: "LEFT", roomId: prev });
           for (const peer of remainingPeers) {
             send(peer, { type: "LEFT", roomId: prev });
           }
@@ -126,19 +154,28 @@ export async function initWebsocketServer(
     });
 
     ws.on("close", () => {
-      if ((ws as any).__ctx?.roomId) {
-        const rid = (ws as any).__ctx.roomId;
-        const remainingPeers = rooms.leave(rid, ws);
-        y.leave(rid, ws);
-
-        for (const peer of remainingPeers) {
-          send(peer, { type: "LEFT", roomId: rid });
-        }
-      } else {
+      const { roomId, userId } = ctx;
+      if (!roomId) {
         rooms.leaveAll(ws);
         y.leaveAll(ws);
+        return;
       }
-      log.info({ userId: ctx.userId }, "WS disconnected");
+
+      const remainingPeers = rooms.leave(roomId, ws);
+      y.leave(roomId, ws);
+      ctx.roomId = undefined;
+
+      const roomMap = getPendingMap(roomId);
+      cancelPendingLeave(roomId, userId);
+
+      const timeout = setTimeout(() => {
+        for (const peer of remainingPeers) {
+          send(peer, { type: "LEFT", roomId });
+        }
+        roomMap.delete(userId);
+      }, RECONNECT_GRACE_MS);
+
+      roomMap.set(userId, timeout);
     });
 
     ws.on("error", (err) => {
