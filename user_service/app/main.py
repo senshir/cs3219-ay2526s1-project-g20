@@ -11,13 +11,13 @@ app = FastAPI(title="M1 User Service", description="User management service for 
 async def lifespan(app: FastAPI):
     # --- Startup logic ---
     await create_indexes()
-    print("✅ MongoDB indexes created successfully")
+    print("MongoDB indexes created successfully")
 
     yield  # ⬅️ This marks the point where the app starts serving requests
 
     # --- Shutdown logic ---
     client.close()
-    print("🛑 MongoDB connection closed")
+    print("MongoDB connection closed")
 
 # Include API routes
 app.include_router(api_router)

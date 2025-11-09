@@ -30,8 +30,8 @@ export default function LoginModal({ onClose }) {
       }
       onClose?.();
     } catch (err) {
-      console.error("Auth error:", err);
-      setError(err.message || "Something went wrong");
+      console.error("Auth error:", err.message);
+      setError(err?.message || "Something went wrong");
     }
   }
 
@@ -79,7 +79,9 @@ export default function LoginModal({ onClose }) {
       </div>
 
       <div>
-        <label className="label">Password</label>
+        <label className="label">Password (min. 8
+           letters with  requiring at least one upper- and lowercase,
+            numeric, and special character )</label>
         <input className="input" name="password" type="password" required />
       </div>
 
