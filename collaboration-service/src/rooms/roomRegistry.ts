@@ -1,3 +1,4 @@
+import { websocket } from "lib0";
 import type { WebSocket } from "ws";
 
 export class RoomRegistry {
@@ -14,12 +15,13 @@ export class RoomRegistry {
     return set.size;
   }
 
-  leave(roomId: string, ws: WebSocket) {
+  leave(roomId: string, ws: WebSocket): WebSocket[] {
     const set = this.rooms.get(roomId);
-    if (!set) return 0;
+    if (!set) return [];
     set.delete(ws);
+    const remaining = Array.from(set.values());
     if (set.size === 0) this.rooms.delete(roomId);
-    return set.size;
+    return remaining;
   }
 
   broadcast(roomId: string, data: unknown, except?: WebSocket) {
@@ -31,6 +33,11 @@ export class RoomRegistry {
         peer.send(raw);
       }
     }
+  }
+
+  peers(roomId: string): WebSocket[] {
+    const set = this.rooms.get(roomId);
+    return set ? Array.from(set.values()) : [];
   }
 
   count(roomId: string): number {

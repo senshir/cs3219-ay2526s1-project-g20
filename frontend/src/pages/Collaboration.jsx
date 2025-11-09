@@ -5,6 +5,8 @@ import * as Y from "yjs";
 import { initVimMode } from "monaco-vim";
 import { endpoints } from "../lib/api";
 import "../css/CodeEditor.css";
+import PeerLeftModal from "../components/PeerLeftModal.jsx";
+
 
 /**
  * Collaboration.jsx — full-featured collab UI
@@ -20,10 +22,11 @@ export default function Collaboration() {
 
   // --- Connection & editor UI state ---
   const [status, setStatus] = useState("connecting…");
-  const [language, setLanguage] = useState("python"); // default matches practice page
+  const [language, setLanguage] = useState("python");
   const [theme, setTheme] = useState("custom-dark");
   const [vimMode, setVimMode] = useState(false);
   const [isReadonly, setIsReadonly] = useState(false);
+  const [peerLeftOpen, setPeerLeftOpen] = useState(false);
 
   // Question & run/test state
   const [question, setQuestion] = useState(state?.question ?? null);
@@ -119,6 +122,10 @@ export default function Collaboration() {
           }
         } else if (msg.type === "ERROR" && msg.message) {
           setStatus(`error: ${msg.message}`);
+        } else if (msg.type === "LEFT") {
+          if (!state?.roomId || msg.roomId === state.roomId) {
+            setPeerLeftOpen(true);
+          }
         }
       } catch {
         // ignore
@@ -645,6 +652,9 @@ int main() {
   };
 
   const quitSession = () => {
+    try {
+      wsRef.current?.send(JSON.stringify({ type: "LEAVE_ROOM" }));
+    } catch {}
     try { wsRef.current?.close(); } catch {}
     navigate("/"); // or navigate('/problems') if you prefer
   };
@@ -880,6 +890,13 @@ int main() {
           </div>
         </div>
       </div>
+
+      <PeerLeftModal
+        open={peerLeftOpen}
+        onContinue={() => setPeerLeftOpen(false)}
+        onExit={quitSession}
+        onClose={() => setPeerLeftOpen(false)}
+      />
     </div>
   );
 }
