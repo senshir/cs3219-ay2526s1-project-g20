@@ -9,13 +9,11 @@ app = FastAPI(title="M1 User Service", description="User management service for 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # --- Startup logic ---
     await create_indexes()
     print("MongoDB indexes created successfully")
 
-    yield  # ⬅️ This marks the point where the app starts serving requests
+    yield 
 
-    # --- Shutdown logic ---
     client.close()
     print("MongoDB connection closed")
 
@@ -40,7 +38,6 @@ app.add_middleware(
     allow_headers=["*"],        # allow all headers
 )
 
-# Root endpoint
 @app.get("/")
 async def root():
     return {"message": "Welcome to User Service API"}

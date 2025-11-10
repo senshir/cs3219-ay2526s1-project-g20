@@ -140,11 +140,9 @@ class UserService:
 
     @staticmethod
     async def update_password(user_id: str, update_data: PasswordUpdate):
-        # Move your existing update_user_password logic here
-        # Include validation for current password matching
-        user = users_collection.find_one({"_id": ObjectId(user_id)})
+        user = await users_collection.find_one({"_id": ObjectId(user_id)})
 
-        if not user or verify_password(update_data.current_password, user["password"]):
+        if not user or not verify_password(update_data.current_password, user["password"]):
             raise HTTPException(status_code=401, detail="Current password is incorrect")
         
         hashed_password = get_password_hash(update_data.new_password)

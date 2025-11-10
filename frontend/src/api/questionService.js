@@ -19,7 +19,6 @@ export async function getAllQuestions( { difficulty, category, search } = {}) {
   const res = await fetch(`${API_BASE}/api/questions?${params.toString()}`);
   const data = await handleResponse(res);
 
-  // ✅ The actual questions array is in data.data
   return data.data || [];
 }
 

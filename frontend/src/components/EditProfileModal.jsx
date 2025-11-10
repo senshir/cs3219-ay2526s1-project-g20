@@ -2,10 +2,12 @@ import React, { useState } from "react";
 import "../css/EditProfileModal.css";
 import { updatePassword, updateUsername } from "../api/userService";
 import Modal from "./ProfilePopUpModal.jsx";
+import PasswordField from "./PasswordField";
 
 export default function EditProfileModal({ user, onClose }) {
   const [username, setUsername] = useState(user.username || "");
   const [password, setPassword] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -22,14 +24,14 @@ export default function EditProfileModal({ user, onClose }) {
       }
 
       // Update password if provided
-      if (password) {
+      if (currentPassword && password) {
         if (password !== confirm) throw new Error("Passwords do not match");
-        updatePassword(user.password, password);
+        await updatePassword(currentPassword, password);
       }
 
-      setMessage("✅ Profile updated successfully!");
+      setMessage("Profile updated successfully!");
     } catch (err) {
-      setMessage("❌ " + err.message);
+      setMessage(err.message);
     } finally {
       setLoading(false);
     }
@@ -51,27 +53,23 @@ export default function EditProfileModal({ user, onClose }) {
         </div>
 
         {/* Password fields */}
-        <div className="form-group">
-          <label className="block text-sm font-medium mb-1">New Password</label>
-          <input
-            type="password"
-            className="input"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            disabled={loading}
-          />
-        </div>
+        <PasswordField label ="Current Password"
+          value={currentPassword}
+          onChange={(e) => setCurrentPassword(e.target.value)}
+          disabled={loading}
+        />
 
-        <div className="form-group">
-          <label className="block text-sm font-medium mb-1">Confirm Password</label>
-          <input
-            type="password"
-            className="input"
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-            disabled={loading}
-          />
-        </div>
+        <PasswordField label ="New Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          disabled={loading}
+        />
+
+        <PasswordField label ="Confirm New Password"
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          disabled={loading}
+        />
 
         {/* Message */}
         {message && (
