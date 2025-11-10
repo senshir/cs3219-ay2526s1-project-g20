@@ -1,40 +1,60 @@
 import React, { useMemo, useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import "../css/Problems.css";
-import { getAllQuestions } from "../api/questionService";
-
+import { endpoints } from "../lib/api";
 
 export default function Problems() {
-  const [problems, setProblems] = useState([]);
+  const navigate = useNavigate();
   const [kw, setKw] = useState("");
   const [topic, setTopic] = useState("");
   const [diff, setDiff] = useState("");
-  const [error, setError] = useState("");
+  const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
+  // Fetch questions from the API
   useEffect(() => {
-    (async () => {
+    const fetchQuestions = async () => {
       try {
-        const data = await getAllQuestions();
-        setProblems(data);
+        setLoading(true);
+        // Using the question service endpoint from API configuration
+        const response = await fetch(`${endpoints.questions}/api/questions?limit=100`);
+        const result = await response.json();
+        
+        if (result.success) {
+          // Transform API data to match frontend format
+          const formattedQuestions = result.data.map((q, index) => ({
+            id: index + 1,
+            title: q.title,
+            topic: q.categories && q.categories.length > 0 ? q.categories[0] : "General",
+            diff: q.difficulty,
+            status: "Practice", // Default status
+            blurb: q.description?.substring(0, 50) + "..." || "",
+            _id: q._id
+          }));
+          setQuestions(formattedQuestions);
+        } else {
+          setError("Failed to fetch questions");
+        }
       } catch (err) {
-        setError(err.message || "Failed to load problems");
+        console.error("Error fetching questions:", err);
+        setError("Failed to connect to question service");
       } finally {
         setLoading(false);
       }
-    })();
+    };
+
+    fetchQuestions();
   }, []);
   
   const rows = useMemo(() => {
-    return problems.filter(r => {
+    return questions.filter(r => {
       const okKw = !kw || r.title.toLowerCase().includes(kw.toLowerCase());
       const okT = !topic || r.topic === topic;
       const okD = !diff || r.difficulty === diff;
       return okKw && okT && okD;
     });
-  }, [problems, kw, topic, diff]);
-
-  if (loading) return <p>Loading problems...</p>;
-  if (error) return <p className="error-msg">{error}</p>;
+  }, [kw, topic, diff, questions]);
 
   return (
     <div className="problems-page">
@@ -57,9 +77,13 @@ export default function Problems() {
             <select className="btn select" value={topic} onChange={e => setTopic(e.target.value)}>
               <option value="">All</option>
               <option>Arrays</option>
+              <option>Algorithms</option>
+              <option>Data Structures</option>
+              <option>Dynamic Programming</option>
               <option>Strings</option>
-              <option>Graphs</option>
-              <option>DP</option>
+              <option>Math</option>
+              <option>Sorting</option>
+              <option>Searching</option>
             </select>
           </div>
 
@@ -97,36 +121,61 @@ export default function Problems() {
           <div className="col-status">Status</div>
         </div>
 
-        <div className="list">
-          {rows.map(r => (
-            <div key={r.id} className="item problem-row">
-              <div className="col-id meta">{r.id}</div>
-              <div className="col-title">
-                <div className="problem-title">{r.title}</div>
-                <div className="meta">{r.blurb}</div>
+        {loading && (
+          <div style={{ padding: "2rem", textAlign: "center" }}>
+            <div className="meta">Loading questions...</div>
+          </div>
+        )}
+
+        {error && (
+          <div style={{ padding: "2rem", textAlign: "center", color: "#ff0000" }}>
+            <div className="meta">Error: {error}</div>
+          </div>
+        )}
+
+        {!loading && !error && (
+          <div className="list">
+            {rows.length === 0 ? (
+              <div style={{ padding: "2rem", textAlign: "center" }}>
+                <div className="meta">No questions found matching your filters.</div>
               </div>
-              <div className="col-topic">
-                <span className="badge">{r.topic}</span>
-              </div>
-              <div className="col-diff">
-                <span className="badge">{r.diff}</span>
-              </div>
-              <div className="col-status">
-                <span
-                  className={
-                    r.status === "Solved"
-                      ? "badge badge--dark"
-                      : r.status === "Not Solved"
-                      ? "badge badge--red"
-                      : "badge"
-                  }
+            ) : (
+              rows.map(r => (
+                <div 
+                  key={r._id || r.id} 
+                  className="item problem-row"
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => navigate(`/code/${r._id}`)}
                 >
-                  {r.status}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
+                  <div className="col-id meta">{r.id}</div>
+                  <div className="col-title">
+                    <div className="problem-title">{r.title}</div>
+                    <div className="meta">{r.blurb}</div>
+                  </div>
+                  <div className="col-topic">
+                    <span className="badge">{r.topic}</span>
+                  </div>
+                  <div className="col-diff">
+                    <span className="badge">{r.diff}</span>
+                  </div>
+                  <div className="col-status">
+                    <span
+                      className={
+                        r.status === "Solved"
+                          ? "badge badge--dark"
+                          : r.status === "Not Solved"
+                          ? "badge badge--red"
+                          : "badge"
+                      }
+                    >
+                      {r.status}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
       </section>
     </div>
   );
